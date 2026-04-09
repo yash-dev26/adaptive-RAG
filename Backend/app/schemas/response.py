@@ -4,5 +4,7 @@ class ChatResponse(BaseModel):
     response: str
 
 class IngestResponse(BaseModel):
-    document_id: str
+    file_id: str
     status: str
+    message: str
+    

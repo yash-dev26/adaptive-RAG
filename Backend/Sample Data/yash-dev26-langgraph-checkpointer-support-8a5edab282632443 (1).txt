@@ -1,0 +1,174 @@
+Directory structure:
+└── yash-dev26-langgraph-checkpointer-support/
+    ├── app.py
+    ├── graph.py
+    ├── requirements.txt
+    └── support.py
+
+================================================
+FILE: app.py
+================================================
+from graph import create_graph_chat
+from dotenv import load_dotenv
+from langgraph.checkpoint.mongodb import MongoDBSaver
+from langgraph.types import Command
+load_dotenv()
+import os
+
+MONGODB_URI = os.getenv("MONGODB_URI")
+THREAD_ID = os.getenv("THREAD_ID", "8")
+
+def connect_to_mongodb():
+    if MONGODB_URI is None:
+        raise ValueError("MONGODB_URI is not set in the environment variables.")
+    return MongoDBSaver.from_conn_string(MONGODB_URI)
+
+
+def init():
+    thread_id = THREAD_ID
+
+    try:
+        with connect_to_mongodb() as checkpointer:
+            print("Successfully connected to MongoDB.")
+            graph_with_mongo = create_graph_chat(checkpointer=checkpointer)
+            config = {"configurable": {"thread_id": thread_id}}
+
+            while True:
+                state = graph_with_mongo.get_state(config)
+                interrupts = getattr(state, "interrupts", ())
+
+                
+                if interrupts:
+
+                    print("Your request is being handled by support. Please wait...")
+                    continue
+
+                user_input = input("> ")
+                if user_input.lower() in ["exit", "quit"]:
+                    break
+                for chunk in graph_with_mongo.stream(
+                    {"messages": [{"role": "user", "content": user_input}]},
+                    config=config,
+                    stream_mode="values",
+                ):
+                    if "messages" in chunk:
+                        chunk["messages"][-1].pretty_print()
+    except Exception as e:
+        raise ValueError(f"Failed to connect to MongoDB during initialization: {e}")
+
+
+if __name__ == "__main__":
+    init()
+
+
+================================================
+FILE: graph.py
+================================================
+from typing import Annotated
+from typing_extensions import TypedDict
+
+from langgraph.graph import StateGraph, START, END
+from langgraph.graph.message import add_messages
+from langchain.chat_models import init_chat_model
+from langchain_core.tools import tool
+from langgraph.types import interrupt
+from langgraph.prebuilt import ToolNode, tools_condition
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
+@tool()
+def human_interrupt_tool(query: str):
+    """Request human assistance."""
+    human_reply = interrupt({
+        "query": query,
+        "message": "The agent has requested human assistance. Please provide input to help the agent continue.",
+    })  # graph will exit out and save data in DB
+    return human_reply["data"]  # resume graph with human input
+
+tools = [human_interrupt_tool]
+
+llm = init_chat_model(model_provider="openai", model="gpt-4.1")
+llm_with_tools = llm.bind_tools(tools=tools)
+
+
+class State(TypedDict):
+    messages: Annotated[list, add_messages]
+
+
+def chatbot(state: State):
+    messages = state["messages"]
+    response = llm_with_tools.invoke(messages)
+    return {"messages": [response]}
+
+tools_node = ToolNode(tools=tools)
+graph_builder = StateGraph(State)
+graph_builder.add_node("chatbot", chatbot)
+graph_builder.add_node("tools", tools_node)
+graph_builder.add_conditional_edges("chatbot", tools_condition)
+graph_builder.add_edge("tools", "chatbot")  # after tool is done, go back to chatbot to get response from tool call
+graph_builder.add_edge(START, "chatbot")
+graph_builder.add_edge("chatbot", END)
+
+graph = graph_builder.compile()
+
+# doing this is good if we later decide to switch from mongo checkpointer to something else
+def create_graph_chat(checkpointer):
+    return graph_builder.compile(checkpointer=checkpointer)
+
+
+
+
+================================================
+FILE: requirements.txt
+================================================
+[Binary file]
+
+
+================================================
+FILE: support.py
+================================================
+from graph import create_graph_chat, graph
+from dotenv import load_dotenv
+from langgraph.checkpoint.mongodb import MongoDBSaver
+from langgraph.types import Command
+load_dotenv()
+import os
+MONGODB_URI = os.getenv("MONGODB_URI")
+
+def connect_to_mongodb():
+    if MONGODB_URI is None:
+        raise ValueError("MONGODB_URI is not set in the environment variables.")
+    return MongoDBSaver.from_conn_string(MONGODB_URI)
+
+def init():
+    thread_id = "8"
+    config = {"configurable": {"thread_id": thread_id}}
+
+    try:
+        with connect_to_mongodb() as checkpointer:
+            print("Successfully connected to MongoDB.")
+            graph_with_mongo = create_graph_chat(checkpointer=checkpointer)
+
+            state = graph_with_mongo.get_state(config)
+            interrupts = getattr(state, "interrupts", ())
+            if not interrupts:
+                print("No pending interrupt found for this thread.")
+                return
+
+            payload = getattr(interrupts[0], "value", {}) or {}
+            prompt = payload.get("query") or payload.get("message") or "resolve the issue"
+            ans = input(f"{prompt}\n> ")
+
+            resume_command = Command(resume={"data": ans})
+            for event in graph_with_mongo.stream(resume_command, config=config, stream_mode="values"):
+                if "messages" in event:
+                    event["messages"][-1].pretty_print()
+    except Exception as e:
+        raise ValueError(f"Failed to connect to MongoDB during initialization: {e}")
+    
+
+
+init()
+

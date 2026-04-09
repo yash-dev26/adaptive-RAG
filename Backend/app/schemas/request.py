@@ -5,6 +5,8 @@ class ChatRequest(BaseModel):
     query: str
 
 class IngestRequest(BaseModel):
-    document_id: str
-    User_id: str
+    file_id : str
+    user_id: str
+    
+    
     

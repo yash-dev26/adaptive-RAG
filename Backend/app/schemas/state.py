@@ -9,4 +9,5 @@ class GraphState(BaseModel):
     intent: Optional[str] = None
     file_id: Optional[str] = None
     response: Optional[str] = None
+    retrieved_docs: Optional[list] = None
     messages: Annotated[list, add_messages] = Field(default_factory=list)
