@@ -5,10 +5,12 @@ from app.schemas.state import GraphState
 graph = build_graph()
 
 async def process_chat(request: ChatRequest):
-    initial_state = GraphState(user_id=request.user_id, query=request.query)
-    final_state = graph.invoke(initial_state.model_dump())
+    state = GraphState(
+        user_id=request.user_id,
+        query=request.query,
+        file_id=request.file_id if request.file_id else None
+    )
 
-    if isinstance(final_state, dict):
-        return final_state.get("response")
+    result = graph.invoke(state)
 
-    return getattr(final_state, "response", None)
+    return result.response

@@ -1,5 +1,5 @@
-from app.rag.embeddings import gen_embeddingsAndStoreInQdrant
-from app.rag.chunking import load_file, split_text
+from app.ingestion.embeddings import gen_embeddingsAndStoreInQdrant
+from app.ingestion.chunking import load_file, split_text
 from app.config.server import config
 
 async def ingest_data(request):
@@ -8,8 +8,8 @@ async def ingest_data(request):
     # else:
     #     text = request.text
 
-    text = load_file(request.pdf_file)
-    print(f"Loaded text from PDF: {text[:100]}...")  # Debug: Print the first 100 characters of the loaded text
+    text = load_file(request.file_path)
+    print(f"Loaded text from file: {text[:100]}...")  # Debug: Print the first 100 characters of the loaded text
 
     chunks = split_text(text)
     
