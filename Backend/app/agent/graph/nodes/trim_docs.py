@@ -2,6 +2,7 @@ from app.schemas.state import GraphState
 
 
 def trim_docs_node(state: GraphState):
+    print("[flow] entering trim_docs_node")
     docs = state.context or []
     qdrant_scores = state.scores or []
     rrf_scores = state.rrf_scores or []

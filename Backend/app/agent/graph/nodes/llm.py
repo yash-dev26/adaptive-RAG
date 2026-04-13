@@ -2,6 +2,7 @@ from app.schemas.state import GraphState
 from app.config.openaiConfig import openai_client
 
 def llm_node(state: GraphState):
+    print("[flow] entering llm_node")
 
     SYSTEM_PROMPT = """You are a helpful assistant that answers user queries."""
 

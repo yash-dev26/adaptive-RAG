@@ -4,6 +4,7 @@ from app.schemas.state import GraphState
 
 graph = build_graph()
 
+
 async def process_chat(request: ChatRequest):
     state = GraphState(
         user_id=request.user_id,
@@ -13,4 +14,7 @@ async def process_chat(request: ChatRequest):
 
     result = graph.invoke(state)
 
-    return result.response
+    if isinstance(result, dict):
+        return result.get("response") or "I could not generate a response right now."
+
+    return getattr(result, "response", None) or "I could not generate a response right now."

@@ -2,6 +2,7 @@ from app.schemas.state import GraphState
 from app.config.openaiConfig import openai_client
 
 def generate_node(state: GraphState):
+    print("[flow] entering generate_node")
     query = state.query
     context = state.context
     

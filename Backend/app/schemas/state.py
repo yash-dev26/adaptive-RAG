@@ -6,37 +6,45 @@ from typing_extensions import Annotated
 
 class GraphState(BaseModel):
     # ---------------------------------------------------
-    # 🔹 User Input
+    # User Input
     # ---------------------------------------------------
     user_id: str
     query: str
     file_id: Optional[str] = None
 
     # ---------------------------------------------------
-    # 🔹 Query Processing
+    # Query Processing
     # ---------------------------------------------------
     rewritten_query: Optional[str] = None
-    queries: Optional[List[str]] = None   # 🔥 for multi-rewrite
+    queries: Optional[List[str]] = None          # for multi-rewrite
 
     intent: Optional[Literal["rag", "llm"]] = None
     rewrite_type: Optional[Literal["none", "single", "multi"]] = None
 
     # ---------------------------------------------------
-    # 🔹 Retrieval Output
+    # Post-retrieval evaluation
     # ---------------------------------------------------
-    context: Optional[List[str]] = None   # final docs (after RRF / rerank)
-    scores: Optional[List[float]] = None  # 🔥 CLEAN similarity scores
-
-    # (optional but powerful)
-    rrf_scores: Optional[List[float]] = None  # debugging / advanced tuning
+    eval_action: Optional[
+        Literal["generate", "rewrite_single", "rewrite_multi", "llm_fallback"]
+    ] = None
 
     # ---------------------------------------------------
-    # 🔹 Conversation / LLM
+    # Retrieval Output
+    # ---------------------------------------------------
+    context: Optional[List[str]] = None          # final docs (after RRF / rerank)
+    scores: Optional[List[float]] = None         # similarity scores
+    rrf_scores: Optional[List[float]] = None     # for debugging / advanced tuning
+
+    # ---------------------------------------------------
+    # Conversation / LLM
     # ---------------------------------------------------
     messages: Annotated[List, add_messages] = Field(default_factory=list)
     response: Optional[str] = None
 
     # ---------------------------------------------------
-    # 🔹 Control Flags (optional)
+    # Control Flags
     # ---------------------------------------------------
     confidence: Optional[float] = None
+
+    # Track rewrite attempts to avoid infinite loops
+    rewrite_attempts: int = 0
