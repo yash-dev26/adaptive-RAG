@@ -1,9 +1,12 @@
 from uuid import uuid4
 from typing import List
+import json
 
+from app.config.redis import redis_client
 from app.repository.qdrant import store_in_qdrant
 from app.config.server import config
 from app.config.openaiConfig import openai_client
+from app.cache.embeddings_cache import _embedding_cache_key
 
 EMBEDDING_MODEL = "text-embedding-3-small"
 EMBEDDING_DIMENSION = 384
@@ -11,18 +14,23 @@ BATCH_SIZE = 512
 
 
 def gen_embeddings(text: str) -> List[float]:
+    # Check if the embedding is already in the cache
+    cache_key = _embedding_cache_key(text)
+    cached_embedding = redis_client.get(cache_key)
+    if cached_embedding:
+        return json.loads(cached_embedding)
+
     response = openai_client.embeddings.create(
         model=EMBEDDING_MODEL,
         dimensions=EMBEDDING_DIMENSION,
         input=text,
     )
-    return response.data[0].embedding
+    embedding =  response.data[0].embedding
+    # Store the embedding in the cache
+    redis_client.set(cache_key, json.dumps(embedding))
+    return embedding
 
 def _embed_batch(texts: List[str]) -> List[List[float]]:
-    """
-    Embed a list of texts in a single API call.
-    Returns vectors in the same order as `texts`.
-    """
     response = openai_client.embeddings.create(
         model=EMBEDDING_MODEL,
         dimensions=EMBEDDING_DIMENSION,
