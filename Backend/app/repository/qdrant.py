@@ -16,6 +16,9 @@ def ensure_collections():
             vectors_config={
                 "size": 384,
                 "distance": "Cosine"
+            },
+            sparse_vectors_config={
+                "text": {}   
             }
         )
     else:

@@ -7,6 +7,9 @@ from app.repository.qdrant import store_in_qdrant
 from app.config.server import config
 from app.config.openaiConfig import openai_client
 from app.cache.embeddings_cache import _embedding_cache_key
+from fastembed import SparseTextEmbedding
+
+sparse_model = SparseTextEmbedding()
 
 EMBEDDING_MODEL = "text-embedding-3-small"
 EMBEDDING_DIMENSION = 384
@@ -53,13 +56,18 @@ async def gen_embeddingsAndStoreInQdrant(
         embeddings = _embed_batch(batch)
         all_embeddings.extend(embeddings)
 
+    sparse_vectors = list(sparse_model.embed(chunks))
+
     points = [
         {
             "id": str(uuid4()),
             "vector": embedding,
+            "sparse_vector": {
+                "text": sparse_vectors[idx]
+            },
             "payload": {
                 "chunk": chunk,
-                "text": chunk,         
+                "text": chunk,
                 "file_id": file_id,
                 "user_id": user_id,
                 "chunk_index": idx,
