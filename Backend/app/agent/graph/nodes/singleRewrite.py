@@ -17,7 +17,7 @@ def single_query_rewrite_node(state: GraphState):
     
     history_block = "\n".join(history_lines) if history_lines else "No prior conversation."
 
-    SYSTEM_PROMPT = """You are a query rewriting assistant for a retrieval system. You will be given a conversation history followed by the user's latest query. The latest query may contain ambiguous references like "it", "this", "they" that refer to something in the history. Rewrite the latest query into a fully self-contained, specific question that can be understood without the conversation history. Do not answer the query. Return only the rewritten query as plain text.
+    SYSTEM_PROMPT = f"""You are a query rewriting assistant for a retrieval system. You will be given a conversation history followed by the user's latest query. The latest query may contain ambiguous references like "it", "this", "they" that refer to something in the history. Rewrite the latest query into a fully self-contained, specific question that can be understood without the conversation history. Do not answer the query. Return only the rewritten query as plain text.
     Conversation History:
     {history_block}"""
 
