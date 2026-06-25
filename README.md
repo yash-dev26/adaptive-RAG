@@ -11,6 +11,18 @@ Unlike traditional “retrieve → generate” pipelines, this project dynamical
 
 `NOTE : Reranking (disabled on low-memory deployments)`
 
+![Python](https://img.shields.io/badge/-Python-14161A?style=flat-square&logo=python&logoColor=3776AB)
+![LangGraph](https://img.shields.io/badge/-LangGraph-14161A?style=flat-square&logo=langchain&logoColor=1C3C3C)
+![FastAPI](https://img.shields.io/badge/-FastAPI-14161A?style=flat-square&logo=fastapi&logoColor=009688)
+![Qdrant](https://img.shields.io/badge/-Qdrant-14161A?style=flat-square&logo=qdrant&logoColor=DC244C)
+![Redis](https://img.shields.io/badge/-Redis-14161A?style=flat-square&logo=redis&logoColor=FF4438)
+![MongoDB](https://img.shields.io/badge/-MongoDB-14161A?style=flat-square&logo=mongodb&logoColor=47A248)
+![React](https://img.shields.io/badge/-React-14161A?style=flat-square&logo=react&logoColor=61DAFB)
+![Vite](https://img.shields.io/badge/-Vite-14161A?style=flat-square&logo=vite&logoColor=646CFF)
+![TailwindCSS](https://img.shields.io/badge/-Tailwind-14161A?style=flat-square&logo=tailwindcss&logoColor=06B6D4)
+![OpenAI](https://img.shields.io/badge/-OpenAI-14161A?style=flat-square&logo=openai&logoColor=FFFFFF)
+![Groq](https://img.shields.io/badge/-Groq-14161A?style=flat-square&logo=groq&logoColor=F55036)
+![Clerk](https://img.shields.io/badge/-Clerk-14161A?style=flat-square&logo=clerk&logoColor=6C47FF)
 ---
 
 # Overview
@@ -625,7 +637,3 @@ This project was built to explore:
 - Real-world AI infrastructure patterns
 
 ---
-
-# License
-
-MIT License
