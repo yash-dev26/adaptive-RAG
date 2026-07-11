@@ -9,7 +9,6 @@ config = {
     "openai_api_key": os.getenv("OPENAI_API_KEY"),
     "mongodb_uri": os.getenv("MONGODB_URI"),
     "semantic_cache_collection_name": os.getenv("SEMANTIC_CACHE_COLLECTION_NAME"),
-    "clerk_issuer": os.getenv("CLERK_ISSUER"),
     "CORS_ORIGINS": os.getenv("CORS_ORIGINS", "http://localhost:5174,http://localhost:5173,http://localhost:3000"),
     "redis_host": os.getenv("REDIS_HOST", "localhost"),
     "redis_port": os.getenv("REDIS_PORT", "6379"),

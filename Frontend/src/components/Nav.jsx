@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
-import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/clerk-react";
-import { Button } from "./ui";
+import { Button, Badge } from "./ui";
+import { useApiKeys } from "../context/ApiKeysContext.jsx";
 
 const NAV_LINKS = [
   { label: "Architecture", href: "#how-it-works" },
@@ -9,6 +9,8 @@ const NAV_LINKS = [
 ];
 
 export default function Nav() {
+  const { hasOpenAiKey, openModal } = useApiKeys();
+
   return (
     <nav className="fixed top-0 inset-x-0 z-50 h-14 border-b border-zinc-800 bg-zinc-950/90 backdrop-blur-sm">
       <div className="max-w-6xl mx-auto h-full px-6 flex items-center justify-between">
@@ -29,17 +31,16 @@ export default function Nav() {
             </a>
           ))}
 
-          <SignedOut>
-            <SignInButton mode="modal">
-              <Button variant="accent" size="sm" className="font-mono">
-                Sign in
-              </Button>
-            </SignInButton>
-          </SignedOut>
+          <Button variant="outline" size="sm" className="font-mono gap-2" onClick={openModal}>
+            API Keys
+            {hasOpenAiKey ? <Badge variant="accent">set</Badge> : <Badge variant="warning">needed</Badge>}
+          </Button>
 
-          <SignedIn>
-              <UserButton />
-          </SignedIn>
+          <Link to="/chat">
+            <Button variant="accent" size="sm" className="font-mono">
+              Open chat →
+            </Button>
+          </Link>
         </div>
       </div>
     </nav>

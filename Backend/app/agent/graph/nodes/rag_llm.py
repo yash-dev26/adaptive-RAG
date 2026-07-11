@@ -2,6 +2,8 @@ from app.schemas.state import GraphState
 from app.service.LLMProviders import generate_completion
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from app.config.models import GENERATION_MODEL, GENERATION_PROVIDER
+from app.agent.graph.keys import extract_keys
+from langchain_core.runnables import RunnableConfig
 
 def _to_openai_message(message) -> dict:
     role_map = {"human": "user", "ai": "assistant", "system": "system"}
@@ -10,7 +12,7 @@ def _to_openai_message(message) -> dict:
         "content": getattr(message, "content", ""),
     }
 
-def generate_node(state: GraphState):
+def generate_node(state: GraphState, config: RunnableConfig):
     print("[flow] entering generate_node")
     query = state.query
     context = state.context
@@ -26,9 +28,13 @@ def generate_node(state: GraphState):
     else:
         messages = [HumanMessage(content=query)]
 
+    openai_api_key, groq_api_key = extract_keys(config)
+
     response = generate_completion(
         provider=GENERATION_PROVIDER,
         model=GENERATION_MODEL,
+        openai_api_key=openai_api_key,
+        groq_api_key=groq_api_key,
         messages=[_to_openai_message(m) for m in messages],
     )
 
@@ -38,4 +44,3 @@ def generate_node(state: GraphState):
         "messages": [HumanMessage(content=query), AIMessage(content=assistant_text)],
         "response": assistant_text,
     }
-    

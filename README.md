@@ -22,7 +22,6 @@ Unlike traditional “retrieve → generate” pipelines, this project dynamical
 ![TailwindCSS](https://img.shields.io/badge/-Tailwind-14161A?style=flat-square&logo=tailwindcss&logoColor=06B6D4)
 ![OpenAI](https://img.shields.io/badge/-OpenAI-14161A?style=flat-square&logo=openai&logoColor=FFFFFF)
 ![Groq](https://img.shields.io/badge/-Groq-14161A?style=flat-square&logo=groq&logoColor=F55036)
-![Clerk](https://img.shields.io/badge/-Clerk-14161A?style=flat-square&logo=clerk&logoColor=6C47FF)
 ---
 
 # Overview
@@ -53,7 +52,7 @@ The system supports PDF ingestion, semantic search, and conversational querying 
 ```text
                            ┌─────────────────────┐
                            │     React Client    │
-                           │  (Vite + Clerk UI)  │
+                           │   (Vite + BYOK UI)   │
                            └──────────┬──────────┘
                                       │
                                       ▼
@@ -368,16 +367,22 @@ can reuse the same cached response.
 
 ---
 
-# Authentication & Security
+# Identity & BYOK
 
-Authentication is implemented using Clerk JWT verification.
+There's no login. Each browser generates a random session id once (stored in
+localStorage) and sends it on every request purely to keep one user's
+uploads/history separate from another's — it's not an auth mechanism.
+
+All inference calls are Bring-Your-Own-Key: the user supplies an OpenAI key
+(required) and optionally a Groq key via a modal in the UI. Keys are sent as
+request headers, used only in-memory for that request, and never written to
+logs, Redis, or the Mongo checkpointer that backs conversation memory.
 
 ## Features
 
-- Protected API routes
+- Bring-your-own API keys (no server-side inference cost)
 - User-scoped document retrieval
-- JWT validation
-- Multi-user isolation
+- Multi-user isolation via session id
 - Secure file ownership filtering
 
 Every retrieval query is filtered by:
@@ -495,7 +500,6 @@ Frontend/
 - React
 - Vite
 - TailwindCSS
-- Clerk Authentication
 
 ---
 
@@ -609,9 +613,6 @@ npm run dev
 # Environment Variables
 
 ```env
-OPENAI_API_KEY=
-GROQ_API_KEY=
-
 QDRANT_URL=
 QDRANT_API_KEY=
 QDRANT_COLLECTION_NAME=
@@ -620,8 +621,6 @@ SEMANTIC_CACHE_COLLECTION_NAME=
 
 MONGODB_URI=
 
-CLERK_PEM_PUBLIC_KEY=
-VITE_CLERK_PUBLISHABLE_KEY=
 ```
 
 ---

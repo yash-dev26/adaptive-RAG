@@ -1,6 +1,8 @@
 from typing import List
 from app.schemas.state import GraphState
 from app.retrieval.retrieval import retrieve_relevant_documents
+from app.agent.graph.keys import extract_keys
+from langchain_core.runnables import RunnableConfig
 
 
 def reciprocal_rank_fusion(rankings: List[List[dict]], k: int = 20) -> List[dict]:
@@ -23,18 +25,21 @@ def reciprocal_rank_fusion(rankings: List[List[dict]], k: int = 20) -> List[dict
     ]
 
 
-def retrieve_node(state: GraphState) -> dict:
+def retrieve_node(state: GraphState, config: RunnableConfig) -> dict:
     print("[flow] entering retrieve_node")
     base_query = state.rewritten_query or state.query
 
     queries = state.queries if (state.rewrite_type == "multi" and state.queries) else [base_query]
+
+    openai_api_key, _ = extract_keys(config)
 
     all_rankings = [
         retrieve_relevant_documents(
             q,
             top_k=5,
             file_id=state.file_id,      
-            user_id=state.user_id,      
+            user_id=state.user_id,
+            openai_api_key=openai_api_key,
         )
         for q in queries
     ]

@@ -2,6 +2,8 @@ from app.schemas.state import GraphState
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from app.service.LLMProviders import generate_completion
 from app.config.models import GENERATION_MODEL, GENERATION_PROVIDER
+from app.agent.graph.keys import extract_keys
+from langchain_core.runnables import RunnableConfig
 
 def _to_openai_message(message) -> dict:
     role_map = {"human": "user", "ai": "assistant", "system": "system"}
@@ -10,7 +12,7 @@ def _to_openai_message(message) -> dict:
         "content": getattr(message, "content", ""),
     }
 
-def llm_node(state: GraphState):
+def llm_node(state: GraphState, config: RunnableConfig):
     print("[flow] entering llm_node")
 
     SYSTEM_PROMPT = """You are a helpful assistant that answers user queries."""
@@ -25,10 +27,14 @@ def llm_node(state: GraphState):
 
     openai_messages = [_to_openai_message(message) for message in messages]
 
+    openai_api_key, groq_api_key = extract_keys(config)
+
     response = generate_completion(
         provider=GENERATION_PROVIDER,
         model=GENERATION_MODEL,
-        messages=openai_messages
+        openai_api_key=openai_api_key,
+        groq_api_key=groq_api_key,
+        messages=openai_messages,
     )
 
     assistant_text = response

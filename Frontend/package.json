@@ -10,8 +10,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@clerk/clerk-react": "^5.61.6",
-    "@clerk/react": "^6.6.4",
     "axios": "^1.15.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",

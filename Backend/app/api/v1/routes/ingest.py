@@ -5,7 +5,7 @@ from app.schemas.request import IngestRequest
 from app.service.ingestService import ingest_data
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi import Depends
-from app.auth.clerk import verify_token
+from app.auth.session import get_session_id, get_api_keys
 from app.config.rate_limiter import limiter
 
 router = APIRouter()
@@ -15,7 +15,8 @@ router = APIRouter()
 async def ingest(
     request: Request,
     file: UploadFile = File(...),
-    user=Depends(verify_token)
+    session_id: str = Depends(get_session_id),
+    api_keys: dict = Depends(get_api_keys),
 ):
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file uploaded")
@@ -34,14 +35,15 @@ async def ingest(
     stored_path.write_bytes(content)
 
     try:
-        print(f"[ingest] Received file upload: user_id={user['sub']}, file_id={file_id}, filename={file.filename}, content_hash={content_hash}")
+        print(f"[ingest] Received file upload: session_id={session_id}, file_id={file_id}, filename={file.filename}, content_hash={content_hash}")
         ingest_result = await ingest_data(
             IngestRequest(
-                user_id=user["sub"],
+                user_id=session_id,
                 file_id=file_id,
                 file_path=str(stored_path),
                 content_hash=content_hash,
-            )
+            ),
+            openai_api_key=api_keys["openai_api_key"],
         )
     finally:
         if stored_path.exists():

@@ -9,6 +9,7 @@ from app.config.server import config
 
 def retrieve_relevant_documents(
     query: str,
+    openai_api_key: str,
     top_k: int = 5,
     file_id: str | None = None,
     user_id: str | None = None,
@@ -17,7 +18,7 @@ def retrieve_relevant_documents(
     Vector search using query embedding and optional payload filters.
     Filters by file_id and user_id when provided.
     """
-    query_embedding: list[float] = gen_embeddings(query)
+    query_embedding: list[float] = gen_embeddings(query, openai_api_key)
 
     # ── build optional payload filter ───────────────────────────────────────
     filter_conditions = []

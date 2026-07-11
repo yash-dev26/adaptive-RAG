@@ -1,8 +1,9 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import { SignedIn, SignedOut, RedirectToSignIn } from "@clerk/clerk-react";
 import Nav from "./components/Nav";
 import LandingPage from "./pages/LandingPage";
 import ChatPage from "./pages/ChatPage";
+import ApiKeyModal from "./components/ApiKeyModal";
+import RequireApiKey from "./components/requireApiKey";
 import { useEffect } from "react";
 
 export default function App() {
@@ -22,7 +23,7 @@ export default function App() {
 
         wakeBackend();
     }, []);
-    
+
   return (
     <Router>
       <div className="bg-zinc-950 text-zinc-100 min-h-screen flex flex-col">
@@ -39,17 +40,13 @@ export default function App() {
           <Route
             path="/chat"
             element={
-              <>
-                <SignedIn>
-                  <ChatPage />
-                </SignedIn>
-                <SignedOut>
-                  <RedirectToSignIn />
-                </SignedOut>
-              </>
+              <RequireApiKey>
+                <ChatPage />
+              </RequireApiKey>
             }
           />
         </Routes>
+        <ApiKeyModal />
       </div>
     </Router>
   );

@@ -19,8 +19,8 @@ def cosine_similarity(a, b):
 
 
 
-def get_semantic_cached_response(query: str, user_id: str, file_id: str | None):
-    query_embedding = gen_embeddings(query)
+def get_semantic_cached_response(query: str, user_id: str, file_id: str | None, openai_api_key: str):
+    query_embedding = gen_embeddings(query, openai_api_key)
     current_time = int(time.time())
 
     must_conditions = [
@@ -58,8 +58,8 @@ def get_semantic_cached_response(query: str, user_id: str, file_id: str | None):
     return None
 
 
-def set_semantic_cache(query, response, user_id, file_id):
-    embedding = gen_embeddings(query)
+def set_semantic_cache(query, response, user_id, file_id, openai_api_key: str):
+    embedding = gen_embeddings(query, openai_api_key)
     now = int(time.time())
     ttl = 36000
 

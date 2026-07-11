@@ -6,7 +6,7 @@ import os
 from app.config.redis import redis_client
 from app.repository.qdrant import store_in_qdrant
 from app.config.server import config
-from app.config.providers import openai_client
+from app.config.providers import get_openai_client
 from app.cache.embeddings_cache import _embedding_cache_key
 
 EMBEDDING_MODEL = "text-embedding-3-small"
@@ -15,26 +15,28 @@ BATCH_SIZE = 512
 EMBED_TIMEOUT_SEC = float(os.getenv("OPENAI_EMBED_TIMEOUT_SEC", "45"))
 
 
-def gen_embeddings(text: str) -> List[float]:
+def gen_embeddings(text: str, openai_api_key: str) -> List[float]:
     # Check if the embedding is already in the cache
     cache_key = _embedding_cache_key(text)
     cached_embedding = redis_client.get(cache_key)
     if cached_embedding:
         return json.loads(cached_embedding)
 
-    response = openai_client.embeddings.create(
+    client = get_openai_client(openai_api_key)
+    response = client.embeddings.create(
         model=EMBEDDING_MODEL,
         dimensions=EMBEDDING_DIMENSION,
         input=text,
         timeout=EMBED_TIMEOUT_SEC,
     )
-    embedding =  response.data[0].embedding
+    embedding = response.data[0].embedding
     # Store the embedding in the cache
     redis_client.set(cache_key, json.dumps(embedding))
     return embedding
 
-def _embed_batch(texts: List[str]) -> List[List[float]]:
-    response = openai_client.embeddings.create(
+def _embed_batch(texts: List[str], openai_api_key: str) -> List[List[float]]:
+    client = get_openai_client(openai_api_key)
+    response = client.embeddings.create(
         model=EMBEDDING_MODEL,
         dimensions=EMBEDDING_DIMENSION,
         input=texts,
@@ -48,8 +50,9 @@ async def gen_embeddingsAndStoreInQdrant(
     file_id: str,
     user_id: str,
     content_hash: str,
+    openai_api_key: str,
 ) -> dict:
-    
+
     all_embeddings: List[List[float]] = []
     print(f"[embeddings] Generating embeddings for {len(chunks)} chunks...")
 
@@ -62,7 +65,7 @@ async def gen_embeddingsAndStoreInQdrant(
         print(f"[embeddings] Dense embedding batch {batch_start}:{batch_end} (size={len(batch)})")
 
         try:
-            embeddings = _embed_batch(batch_texts)
+            embeddings = _embed_batch(batch_texts, openai_api_key)
         except Exception as e:
             print(f"[embeddings] Dense embedding batch failed at {batch_start}:{batch_end} -> {type(e).__name__}: {e}")
             raise
@@ -96,4 +99,3 @@ async def gen_embeddingsAndStoreInQdrant(
     return await store_in_qdrant(
         config["qdrant_collection_name"], points, file_id, user_id
     )
-

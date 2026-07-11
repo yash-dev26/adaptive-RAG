@@ -1,15 +1,15 @@
 import { useRef, useState } from "react";
-import { useAuth, useUser } from "@clerk/clerk-react";
 import axios from "axios";
 import { parseSseBlock, upsertTrace, mapSources, randomId } from "../lib/utils.js";
+import { getSessionId } from "../lib/session.js";
+import { useApiKeys } from "../context/ApiKeysContext.jsx";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api/v1";
 const FIRST_REQUEST_BOOT_HINT_DELAY_MS = 8000;
 const FIRST_REQUEST_BOOT_HINT = "Backend is booting up (free tier cold start). First response can take around a minute.";
 
 export function useChat() {
-  const { getToken } = useAuth();
-  const { user } = useUser();
+  const { openaiKey, groqKey, hasOpenAiKey, openModal } = useApiKeys();
   const isFirstQueryRef = useRef(true);
 
   const [entries, setEntries] = useState([]);
@@ -23,10 +23,35 @@ export function useChat() {
   const [isUploading, setIsUploading] = useState(false);
   const [ingestedFileId, setIngestedFileId] = useState(null);
 
+  function buildHeaders(extra = {}) {
+    const headers = {
+      "X-Session-Id": getSessionId(),
+      "X-OpenAI-Key": openaiKey,
+      ...extra,
+    };
+    if (groqKey) headers["X-Groq-Key"] = groqKey;
+    return headers;
+  }
+
   async function submitQuery(query) {
     if (!query.trim() || isLoading) return;
 
-    const token = await getToken();
+    if (!hasOpenAiKey) {
+      openModal();
+      setEntries((prev) => [
+        ...prev,
+        {
+          query,
+          answer: "Add your OpenAI API key first (top-right → API Keys) — it's required for embeddings and generation.",
+          sources: [],
+          confidence: 0,
+          pipeline: [{ name: "chat", status: "error", detail: "Missing OpenAI API key.", badge: null }],
+          cacheHit: false,
+        },
+      ]);
+      return;
+    }
+
     const shouldShowFirstBootHint = isFirstQueryRef.current;
     let bootHintTimer = null;
     let hasReceivedServerEvent = false;
@@ -57,12 +82,8 @@ export function useChat() {
     try {
       const res = await fetch(`${API_BASE}/chat/stream`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: buildHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
-          user_id: user.id,
           query,
           file_id: hasUploadedFile ? ingestedFileId : null,
           thread_id: threadId,
@@ -70,6 +91,10 @@ export function useChat() {
       });
 
       if (!res.ok) {
+        if (res.status === 401) {
+          openModal();
+          throw new Error("Invalid or missing API key. Please check your OpenAI key.");
+        }
         if (res.status === 429) {
           throw new Error("Rate limit exceeded. You can make 8 requests per minute. Please wait before trying again.");
         }
@@ -167,7 +192,11 @@ export function useChat() {
 
   async function uploadFile(file) {
     if (!file) return;
-    const token = await getToken();
+
+    if (!hasOpenAiKey) {
+      openModal();
+      return;
+    }
 
     setUploadedFileName(file.name);
     setIsUploading(true);
@@ -177,9 +206,7 @@ export function useChat() {
       formData.append("file", file);
 
       const { data } = await axios.post(`${API_BASE}/upload/`, formData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: buildHeaders(),
       });
 
       setHasUploadedFile(true);
@@ -200,6 +227,7 @@ export function useChat() {
       const message = err?.response?.data?.detail || err.message || "Upload failed";
       setHasUploadedFile(false);
       setIngestedFileId(null);
+      if (err?.response?.status === 401) openModal();
       setEntries((prev) => [
         ...prev,
         {

@@ -1,9 +1,3 @@
-import {
-  SignedIn,
-  SignedOut,
-  SignInButton,
-} from "@clerk/clerk-react";
-
 import { Link } from "react-router-dom";
 import { Badge, Button } from "../ui";
 
@@ -22,20 +16,11 @@ function HeroSection() {
         before generating — with every decision exposed in the UI.
       </p>
       <div className="flex items-center gap-3">
-        <SignedOut>
-          <SignInButton mode="modal">
-            <Button variant="accent" size="lg" className="font-mono">
-              Get started
-            </Button>
-          </SignInButton>
-        </SignedOut>
-        <SignedIn>
-          <Link to="/chat">
-            <Button variant="accent" size="lg" className="font-mono">
-              Open chat →
-            </Button>
-          </Link>
-        </SignedIn>
+        <Link to="/chat">
+          <Button variant="accent" size="lg" className="font-mono">
+            Get started →
+          </Button>
+        </Link>
         <a href="https://github.com/yash-dev26/adaptive-rag" target="_blank" rel="noreferrer">
           <Button variant="outline" size="lg" className="font-mono">
             GitHub

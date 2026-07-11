@@ -1,12 +1,15 @@
 import json
 from app.schemas.state import GraphState
 from app.service.LLMProviders import generate_completion
+from app.agent.graph.keys import extract_keys
+from langchain_core.runnables import RunnableConfig
+from app.config.models import EVALUATOR_MODEL, EVALUATOR_PROVIDER
 
 HIGH_CONFIDENCE_THRESHOLD = 0.72
 LOW_CONFIDENCE_THRESHOLD = 0.45
 MAX_REWRITE_ATTEMPTS = 2
 
-def post_retrieval_evaluator_node(state: GraphState) -> dict:
+def post_retrieval_evaluator_node(state: GraphState, config: RunnableConfig) -> dict:
     print("[flow] entering post_retrieval_evaluator_node")
     query = state.query
     docs = state.context or []
@@ -91,9 +94,13 @@ Guidelines:
 - "llm_fallback"   → docs are completely off-topic; general knowledge is better; they must be completely off topic
 """
 
+    openai_api_key, groq_api_key = extract_keys(config)
+
     response_text = generate_completion(
-        provider="groq",
-        model="llama-3.3-70b-versatile",
+        provider=EVALUATOR_PROVIDER,
+        model=EVALUATOR_MODEL,
+        openai_api_key=openai_api_key,
+        groq_api_key=groq_api_key,
         messages=[{"role": "user", "content": EVAL_PROMPT}],
         temperature=0,
         response_format={"type": "json_object"},

@@ -3,7 +3,9 @@ from pydantic import BaseModel
 
 
 class ChatRequest(BaseModel):
-    user_id: str
+    # user_id is intentionally NOT here as it's derived server-side from the
+    # X-Session-Id header (see app/auth/session.py) so a client can't set
+    # someone else's id in the body and read their documents.
     query: str
     file_id: Optional[str] = None
     thread_id: Optional[str] = None

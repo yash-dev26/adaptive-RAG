@@ -1,29 +1,35 @@
 from app.service.LLMProviders import generate_completion
 from app.schemas.state import GraphState
 from app.config.models import REWRITE_MODEL, REWRITE_PROVIDER
+from app.agent.graph.keys import extract_keys
+from langchain_core.runnables import RunnableConfig
 
-def single_query_rewrite_node(state: GraphState):
+def single_query_rewrite_node(state: GraphState, config: RunnableConfig):
     print("[flow] entering single_query_rewrite_node")
     query = state.query
     history = list(state.messages or [])
     role_map = {"human": "User", "ai": "Assistant", "system": "System"}
-    
+
     history_lines = []
     for msg in history[-6:]:
         role = role_map.get(getattr(msg, "type", ""), "User")
         content = getattr(msg, "content", "")
         if content:
             history_lines.append(f"{role}: {content}")
-    
+
     history_block = "\n".join(history_lines) if history_lines else "No prior conversation."
 
     SYSTEM_PROMPT = f"""You are a query rewriting assistant for a retrieval system. You will be given a conversation history followed by the user's latest query. The latest query may contain ambiguous references like "it", "this", "they" that refer to something in the history. Rewrite the latest query into a fully self-contained, specific question that can be understood without the conversation history. Do not answer the query. Return only the rewritten query as plain text.
     Conversation History:
     {history_block}"""
 
+    openai_api_key, groq_api_key = extract_keys(config)
+
     response_text = generate_completion(
         provider=REWRITE_PROVIDER,
         model=REWRITE_MODEL,
+        openai_api_key=openai_api_key,
+        groq_api_key=groq_api_key,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": query},

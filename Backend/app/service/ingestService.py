@@ -4,7 +4,7 @@ from app.config.server import config
 from app.repository.qdrant import find_existing_file_id_by_content_hash
 from fastapi import HTTPException
 
-async def ingest_data(request):
+async def ingest_data(request, openai_api_key: str):
     print(f"[ingest] Starting ingestion for user_id={request.user_id}, file_id={request.file_id}")
     existing_file_id = find_existing_file_id_by_content_hash(
         collection_name=config["qdrant_collection_name"],
@@ -37,5 +37,6 @@ async def ingest_data(request):
         request.file_id,
         request.user_id,
         request.content_hash,
+        openai_api_key,
     )
     return result

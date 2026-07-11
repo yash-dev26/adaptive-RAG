@@ -60,22 +60,41 @@ def _node_detail(node_name: str, status: str) -> str:
 
     return base_detail
 
-def _resolve_thread_id(request: ChatRequest) -> str:
+def _resolve_thread_id(request: ChatRequest, session_id: str) -> str:
     if request.thread_id:
         return request.thread_id
 
     if request.file_id:
-        return f"{request.user_id}:{request.file_id}"
+        return f"{session_id}:{request.file_id}"
 
-    return f"{request.user_id}:{uuid4()}"
+    return f"{session_id}:{uuid4()}"
 
-async def process_chat(request: ChatRequest, graph):
-    thread_id = _resolve_thread_id(request)
+
+def _build_run_config(thread_id: str, api_keys: dict) -> dict:
+    """
+    BYOK keys go into `configurable`, NOT into GraphState — GraphState is
+    what MongoDBSaver checkpoints on every turn (that's how conversation
+    memory works), and we don't want a user's API key written to Mongo.
+    `configurable` is per-invocation only; nodes read it via extract_keys().
+    """
+    return {
+        "configurable": {
+            "thread_id": thread_id,
+            "openai_api_key": api_keys["openai_api_key"],
+            "groq_api_key": api_keys.get("groq_api_key"),
+        }
+    }
+
+
+async def process_chat(request: ChatRequest, graph, session_id: str, api_keys: dict):
+    thread_id = _resolve_thread_id(request, session_id)
+    openai_api_key = api_keys["openai_api_key"]
 
     semantic_hit = get_semantic_cached_response(
         request.query,
-        request.user_id,
-        request.file_id
+        session_id,
+        request.file_id,
+        openai_api_key,
     )
 
     if semantic_hit:
@@ -86,7 +105,7 @@ async def process_chat(request: ChatRequest, graph):
         }
 
     cached_response = get_cached_response(
-        user_id=request.user_id,
+        user_id=session_id,
         file_id=request.file_id if request.file_id else None,
         query=request.query
     )
@@ -102,16 +121,12 @@ async def process_chat(request: ChatRequest, graph):
     print("[cache] response cache MISS")
 
     state = GraphState(
-        user_id=request.user_id,
+        user_id=session_id,
         query=request.query,
         file_id=request.file_id if request.file_id else None
     )
 
-    invoke_config = {
-        "configurable": {
-            "thread_id": thread_id
-        }
-    }
+    invoke_config = _build_run_config(thread_id, api_keys)
 
     result = graph.invoke(state, config=invoke_config) if graph else None
 
@@ -137,8 +152,9 @@ async def process_chat(request: ChatRequest, graph):
         set_semantic_cache(
             request.query,
             response,
-            request.user_id,
-            request.file_id
+            session_id,
+            request.file_id,
+            openai_api_key,
         )
 
         # Store rewritten query (single)
@@ -146,8 +162,9 @@ async def process_chat(request: ChatRequest, graph):
             set_semantic_cache(
                 rewritten_query,
                 response,
-                request.user_id,
-                request.file_id
+                session_id,
+                request.file_id,
+                openai_api_key,
             )
 
         # Store multi queries
@@ -156,13 +173,14 @@ async def process_chat(request: ChatRequest, graph):
                 set_semantic_cache(
                     q,
                     response,
-                    request.user_id,
-                    request.file_id
+                    session_id,
+                    request.file_id,
+                    openai_api_key,
                 )
 
 
         set_cached_response(
-            user_id=request.user_id,
+            user_id=session_id,
             file_id=request.file_id,
             query=request.query,
             response=response,
@@ -177,8 +195,9 @@ async def process_chat(request: ChatRequest, graph):
     }
 
 
-async def stream_chat_events(request: ChatRequest, graph):
-    thread_id = _resolve_thread_id(request)
+async def stream_chat_events(request: ChatRequest, graph, session_id: str, api_keys: dict):
+    thread_id = _resolve_thread_id(request, session_id)
+    openai_api_key = api_keys["openai_api_key"]
 
     yield _format_sse(
         "status",
@@ -192,8 +211,9 @@ async def stream_chat_events(request: ChatRequest, graph):
 
     semantic_hit = get_semantic_cached_response(
         request.query,
-        request.user_id,
+        session_id,
         request.file_id,
+        openai_api_key,
     )
 
     if semantic_hit:
@@ -219,7 +239,7 @@ async def stream_chat_events(request: ChatRequest, graph):
         return
 
     cached_response = get_cached_response(
-        user_id=request.user_id,
+        user_id=session_id,
         file_id=request.file_id if request.file_id else None,
         query=request.query,
     )
@@ -257,16 +277,12 @@ async def stream_chat_events(request: ChatRequest, graph):
     )
 
     state = GraphState(
-        user_id=request.user_id,
+        user_id=session_id,
         query=request.query,
         file_id=request.file_id if request.file_id else None,
     )
 
-    invoke_config = {
-        "configurable": {
-            "thread_id": thread_id,
-        }
-    }
+    invoke_config = _build_run_config(thread_id, api_keys)
 
     response_text = None
     confidence = None
@@ -331,7 +347,7 @@ async def stream_chat_events(request: ChatRequest, graph):
                 final_state_dict = final_state.values
             else:
                 final_state_dict = final_state if isinstance(final_state, dict) else {}
-            
+
             context = final_state_dict.get("context") if isinstance(final_state_dict, dict) else None
             if context and isinstance(context, list):
                 sources = [
@@ -349,12 +365,13 @@ async def stream_chat_events(request: ChatRequest, graph):
             set_semantic_cache(
                 request.query,
                 response_text,
-                request.user_id,
+                session_id,
                 request.file_id,
+                openai_api_key,
             )
 
             set_cached_response(
-                user_id=request.user_id,
+                user_id=session_id,
                 file_id=request.file_id,
                 query=request.query,
                 response=response_text,
