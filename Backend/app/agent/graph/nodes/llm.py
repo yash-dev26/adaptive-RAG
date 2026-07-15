@@ -5,6 +5,12 @@ from app.config.models import GENERATION_MODEL, GENERATION_PROVIDER
 from app.agent.graph.keys import extract_keys
 from langchain_core.runnables import RunnableConfig
 
+FALLBACK_DISCLAIMER = (
+    "I couldn't find a good enough answer in the document for this, "
+    "so here's a general-knowledge response instead:\n\n"
+)
+
+
 def _to_openai_message(message) -> dict:
     role_map = {"human": "user", "ai": "assistant", "system": "system"}
     return {
@@ -39,7 +45,10 @@ def llm_node(state: GraphState, config: RunnableConfig):
 
     assistant_text = response
 
+    if state.intent == "rag":
+        assistant_text = FALLBACK_DISCLAIMER + assistant_text
+
     return {
-        "messages": [AIMessage(content=assistant_text)],
+        "messages": [HumanMessage(content=state.query), AIMessage(content=assistant_text)],
         "response": assistant_text,
     }

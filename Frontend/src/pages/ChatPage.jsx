@@ -11,9 +11,10 @@ import EmptyState from "../components/chat/emptyState";
 
 export default function ChatPage() {
   const {
-    entries, isLoading, streamTrace, streamMessage,
-    threadId, uploadedFileName, hasUploadedFile, isUploading, ingestedFileId,
-    submitQuery, uploadFile, newThread,
+  entries, isLoading, streamTrace, streamMessage,
+  threadId, uploadedFileName, hasUploadedFile, isUploading, ingestedFileId,
+  submitQuery, uploadFile, newThread,
+  threads, isLoadingThreads, loadThread,
   } = useChat();
 
   const feedRef = useRef(null);
@@ -38,7 +39,7 @@ export default function ChatPage() {
 
   return (
     <div className="flex h-screen bg-zinc-950 text-zinc-100 overflow-hidden">
-      <SessionSidebar
+    <SessionSidebar
         threadId={threadId}
         queryCount={entries.filter((e) => !e.query.startsWith("Uploaded:")).length}
         uploadedFileName={uploadedFileName}
@@ -46,7 +47,10 @@ export default function ChatPage() {
         isUploading={isUploading}
         hasUploadedFile={hasUploadedFile}
         onNewThread={newThread}
-      />
+        threads={threads}
+        isLoadingThreads={isLoadingThreads}
+        onSelectThread={loadThread}
+    />
 
       <div className="flex-1 flex flex-col overflow-hidden">
         <div

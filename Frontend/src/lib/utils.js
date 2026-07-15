@@ -41,3 +41,40 @@ export function mapSources(rawSources = []) {
 export function randomId() {
   return Math.random().toString(36).slice(2, 8);
 }
+
+export function formatRelativeTime(isoString) {
+  const then = new Date(isoString).getTime();
+  const diffSec = Math.max(0, Math.floor((Date.now() - then) / 1000));
+
+  if (diffSec < 60) return "just now";
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay < 7) return `${diffDay}d ago`;
+  return new Date(isoString).toLocaleDateString();
+}
+
+export function pairMessagesIntoEntries(messages = []) {
+  const entries = [];
+  let current = null;
+
+  for (const message of messages) {
+    if (message.role === "user") {
+      if (current) entries.push(current);
+      current = { query: message.content, answer: "", sources: [], confidence: null, pipeline: [], cacheHit: false };
+    } else if (message.role === "assistant") {
+      if (current) {
+        current.answer = message.content;
+        entries.push(current);
+        current = null;
+      } else {
+        entries.push({ query: "", answer: message.content, sources: [], confidence: null, pipeline: [], cacheHit: false });
+      }
+    }
+  }
+  if (current) entries.push(current);
+
+  return entries;
+}

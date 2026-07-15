@@ -1,7 +1,8 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import axios from "axios";
-import { parseSseBlock, upsertTrace, mapSources, randomId } from "../lib/utils.js";
+import { parseSseBlock, upsertTrace, mapSources, randomId, pairMessagesIntoEntries } from "../lib/utils.js";
 import { getSessionId } from "../lib/session.js";
+import { fetchThreadList, fetchThreadMessages } from "../lib/threads.js";
 import { useApiKeys } from "../context/ApiKeysContext.jsx";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api/v1";
@@ -22,6 +23,25 @@ export function useChat() {
   const [hasUploadedFile, setHasUploadedFile] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [ingestedFileId, setIngestedFileId] = useState(null);
+
+  const [threads, setThreads] = useState([]);
+  const [isLoadingThreads, setIsLoadingThreads] = useState(false);
+  const [isLoadingThread, setIsLoadingThread] = useState(false);
+
+  async function refreshThreads() {
+    setIsLoadingThreads(true);
+    try {
+      setThreads(await fetchThreadList());
+    } catch {
+      // fail quietly because its not a critical operation
+    } finally {
+      setIsLoadingThreads(false);
+    }
+  }
+
+  useEffect(() => {
+    refreshThreads();
+  }, []);
 
   function buildHeaders(extra = {}) {
     const headers = {
@@ -86,6 +106,7 @@ export function useChat() {
         body: JSON.stringify({
           query,
           file_id: hasUploadedFile ? ingestedFileId : null,
+          file_name: hasUploadedFile ? uploadedFileName : null,
           thread_id: threadId,
         }),
       });
@@ -165,6 +186,8 @@ export function useChat() {
           cacheHit: finalPayload.cached === true || finalPayload.cached === "semantic",
         },
       ]);
+
+      refreshThreads();
     } catch (err) {
       const message = err?.response?.data?.detail || err.message || "Request failed";
       const isRateLimit = message.includes("Rate limit");
@@ -254,6 +277,42 @@ export function useChat() {
     setIngestedFileId(null);
   }
 
+  async function loadThread(thread) {
+    if (isLoading || thread.thread_id === threadId) return;
+
+    setIsLoadingThread(true);
+    try {
+      const { messages } = await fetchThreadMessages(thread.thread_id);
+
+      setEntries(pairMessagesIntoEntries(messages));
+      setThreadId(thread.thread_id);
+      setStreamTrace([]);
+      setStreamMessage("");
+
+      // Older threads (created before file_name was persisted) won't have
+      // it — fall back to the id-based label rather than showing nothing.
+      setIngestedFileId(thread.file_id || null);
+      setHasUploadedFile(Boolean(thread.file_id));
+      setUploadedFileName(
+        thread.file_name || (thread.file_id ? `Document ${thread.file_id.slice(0, 8)}` : null)
+      );
+    } catch {
+      setEntries((prev) => [
+        ...prev,
+        {
+          query: "Load conversation",
+          answer: "Could not load this conversation. Try again in a moment.",
+          sources: [],
+          confidence: 0,
+          pipeline: [{ name: "threads", status: "error", detail: "Failed to load thread.", badge: null }],
+          cacheHit: false,
+        },
+      ]);
+    } finally {
+      setIsLoadingThread(false);
+    }
+  }
+
   return {
     entries,
     isLoading,
@@ -267,5 +326,9 @@ export function useChat() {
     submitQuery,
     uploadFile,
     newThread,
+    threads,
+    isLoadingThreads,
+    isLoadingThread,
+    loadThread,
   };
 }

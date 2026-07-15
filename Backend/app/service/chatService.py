@@ -4,6 +4,7 @@ from app.schemas.request import ChatRequest
 from app.schemas.state import GraphState
 from app.cache.response_cache import get_cached_response, set_cached_response
 from app.cache.semantic_cache import get_semantic_cached_response, set_semantic_cache
+from app.service.threadService import record_turn
 
 from uuid import uuid4
 
@@ -90,6 +91,8 @@ async def process_chat(request: ChatRequest, graph, session_id: str, api_keys: d
     thread_id = _resolve_thread_id(request, session_id)
     openai_api_key = api_keys["openai_api_key"]
 
+    record_turn(thread_id, session_id, request.file_id, request.file_name, request.query)
+
     semantic_hit = get_semantic_cached_response(
         request.query,
         session_id,
@@ -148,7 +151,7 @@ async def process_chat(request: ChatRequest, graph, session_id: str, api_keys: d
         confidence = getattr(result, "confidence", None)
 
     if confidence is None or confidence > 0.6:
-        # Always store original query (fallback baseline)
+        #Always store original query(fallback baseline)
         set_semantic_cache(
             request.query,
             response,
@@ -157,7 +160,7 @@ async def process_chat(request: ChatRequest, graph, session_id: str, api_keys: d
             openai_api_key,
         )
 
-        # Store rewritten query (single)
+        #Store rewritten query(single)
         if rewritten_query:
             set_semantic_cache(
                 rewritten_query,
@@ -167,7 +170,7 @@ async def process_chat(request: ChatRequest, graph, session_id: str, api_keys: d
                 openai_api_key,
             )
 
-        # Store multi queries
+        #Store multi queries
         if queries:
             for q in queries:
                 set_semantic_cache(
@@ -198,6 +201,8 @@ async def process_chat(request: ChatRequest, graph, session_id: str, api_keys: d
 async def stream_chat_events(request: ChatRequest, graph, session_id: str, api_keys: dict):
     thread_id = _resolve_thread_id(request, session_id)
     openai_api_key = api_keys["openai_api_key"]
+
+    record_turn(thread_id, session_id, request.file_id, request.file_name, request.query)
 
     yield _format_sse(
         "status",

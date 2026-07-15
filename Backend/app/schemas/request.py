@@ -8,6 +8,7 @@ class ChatRequest(BaseModel):
     # someone else's id in the body and read their documents.
     query: str
     file_id: Optional[str] = None
+    file_name: Optional[str] = None
     thread_id: Optional[str] = None
 
 

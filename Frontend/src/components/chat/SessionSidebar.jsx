@@ -1,6 +1,18 @@
-import { Button, Separator } from "../ui";
+import { Button, Separator, ScrollArea } from "../ui";
+import { formatRelativeTime } from "../../lib/utils.js";
 
-function SessionSidebar({ threadId, queryCount, uploadedFileName, ingestedFileId, isUploading, hasUploadedFile, onNewThread }) {
+function SessionSidebar({
+  threadId,
+  queryCount,
+  uploadedFileName,
+  ingestedFileId,
+  isUploading,
+  hasUploadedFile,
+  onNewThread,
+  threads = [],
+  isLoadingThreads,
+  onSelectThread,
+}) {
   return (
     <aside className="w-60 shrink-0 border-r border-zinc-800 flex flex-col p-4 gap-4">
       <div>
@@ -12,10 +24,41 @@ function SessionSidebar({ threadId, queryCount, uploadedFileName, ingestedFileId
 
       <Separator />
 
+      <div className="flex-1 min-h-0 flex flex-col">
+        <p className="text-[10px] font-mono text-zinc-700 uppercase tracking-widest mb-2">Recent chats</p>
+        <ScrollArea className="flex-1 -mx-1 px-1">
+          {isLoadingThreads && threads.length === 0 ? (
+            <p className="text-[11px] text-zinc-600 px-1">Loading…</p>
+          ) : threads.length === 0 ? (
+            <p className="text-[11px] text-zinc-600 px-1">No conversations yet.</p>
+          ) : (
+            <div className="space-y-1">
+              {threads.map((t) => {
+                const isActive = t.thread_id === threadId;
+                return (
+                  <button
+                    key={t.thread_id}
+                    onClick={() => onSelectThread?.(t)}
+                    className={[
+                      "w-full text-left rounded-md px-2 py-1.5 transition-colors",
+                      isActive ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200",
+                    ].join(" ")}
+                  >
+                    <p className="text-[11px] truncate">{t.title}</p>
+                    <p className="text-[10px] font-mono text-zinc-600">{formatRelativeTime(t.updated_at)}</p>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </ScrollArea>
+      </div>
+
+      <Separator />
+
       <div className="space-y-1">
-        <p className="text-[10px] font-mono text-zinc-700 uppercase tracking-widest mb-2">Thread</p>
+        <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-widest mb-2">Thread</p>
         {[
-          ["ID", threadId],
           ["Queries", queryCount],
         ].map(([label, value]) => (
           <div key={label} className="flex justify-between items-center">

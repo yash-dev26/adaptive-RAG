@@ -10,6 +10,7 @@ from app.cache.semantic_cleanup import cleanup_semantic_cache
 import asyncio
 
 from app.repository.qdrant import ensure_collections
+from app.repository.chatSessions import ensure_indexes as ensure_chat_session_indexes
 from app.config.server import config
 from slowapi.errors import RateLimitExceeded
 from fastapi.responses import JSONResponse
@@ -30,6 +31,7 @@ async def lifespan(app: FastAPI):
         print("Successfully connected to MongoDB.")
         app.state.graph = build_graph(checkpointer=checkpointer)
         ensure_collections()
+        ensure_chat_session_indexes()
         cleanup_task = asyncio.create_task(cleanup_semantic_cache())
 
         yield

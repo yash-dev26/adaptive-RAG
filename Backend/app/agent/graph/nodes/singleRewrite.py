@@ -19,9 +19,20 @@ def single_query_rewrite_node(state: GraphState, config: RunnableConfig):
 
     history_block = "\n".join(history_lines) if history_lines else "No prior conversation."
 
-    SYSTEM_PROMPT = f"""You are a query rewriting assistant for a retrieval system. You will be given a conversation history followed by the user's latest query. The latest query may contain ambiguous references like "it", "this", "they" that refer to something in the history. Rewrite the latest query into a fully self-contained, specific question that can be understood without the conversation history. Do not answer the query. Return only the rewritten query as plain text.
+    SYSTEM_PROMPT = f"""You are a search query optimizer for vector database searches. Your task is to reformulate user queries into more effective search terms. You will be given a conversation history followed by the user's latest query. 
     Conversation History:
-    {history_block}"""
+    {history_block}
+    Provide only the optimized search query without any explanations, greetings, or additional commentary.
+
+    Example input: "how to fix a bike tire that's gone flat"
+    Example output: "bicycle tire repair puncture fix patch inflate maintenance flat tire inner tube replacement"
+    
+    Constraints:
+    - Output only the enhanced search terms
+    - Keep focus on searchable concepts
+    - Include both specific and general related terms
+    - Maintain all important meaning from original query
+    - Add relevant synonyms and related terms"""
 
     openai_api_key, groq_api_key = extract_keys(config)
 
