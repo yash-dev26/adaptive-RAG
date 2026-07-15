@@ -8,7 +8,7 @@ from app.agent.graph.nodes.rag_llm import generate_node
 from app.agent.graph.nodes.multiRewrite import multi_query_rewrite_node
 from app.agent.graph.nodes.singleRewrite import single_query_rewrite_node
 from app.agent.graph.nodes.trim_docs import trim_docs_node
-# from app.agent.graph.nodes.reranking import reranking_node
+from app.agent.graph.nodes.reranking import reranking_node
 from app.agent.graph.nodes.llm import llm_node
 
 from app.agent.graph.routing.pre_planner_routes import route_after_pre_planner
@@ -26,7 +26,7 @@ def build_graph(checkpointer=None):
     graph.add_node("retrieve", retrieve_node)
     graph.add_node("evaluator", post_retrieval_evaluator_node)
     graph.add_node("trim_docs", trim_docs_node)
-    # graph.add_node("rerank", reranking_node)
+    graph.add_node("rerank", reranking_node)
     graph.add_node("generate", generate_node)
     graph.add_node("llm", llm_node)
 
@@ -62,7 +62,7 @@ def build_graph(checkpointer=None):
         "evaluator",
         route_after_evaluator,
         {
-            # "do_rerank":       "rerank",
+            "do_rerank":       "rerank",
             "trim_docs":       "trim_docs",
             "rewrite_single":  "single_rewrite",
             "rewrite_multi":   "multi_rewrite",
@@ -72,7 +72,7 @@ def build_graph(checkpointer=None):
     )
 
     graph.add_edge("trim_docs", "generate")
-    # graph.add_edge("rerank", "generate")
+    graph.add_edge("rerank", "generate")
 
     graph.add_edge("generate", END)
     graph.add_edge("llm", END)

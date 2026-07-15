@@ -18,4 +18,5 @@ config = {
     "langsmith_api_key": os.getenv("LANGSMITH_API_KEY"),
     "langsmith_tracing": os.getenv("LANGSMITH_TRACING", "false"),
     "langsmith_project": os.getenv("LANGSMITH_PROJECT", "Adaptive RAG"),
+    "cohere_api_key": os.getenv("COHERE_API_KEY"),
 }
