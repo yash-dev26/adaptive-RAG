@@ -3,11 +3,10 @@ from app.schemas.state import GraphState
 from app.service.LLMProviders import generate_completion
 from app.agent.graph.keys import extract_keys
 from langchain_core.runnables import RunnableConfig
-from app.config.models import EVALUATOR_MODEL, EVALUATOR_PROVIDER
+from app.config.models import EVALUATOR_MODEL, EVALUATOR_PROVIDER, MAX_REWRITE_ATTEMPTS
 
 HIGH_CONFIDENCE_THRESHOLD = 0.70
 LOW_CONFIDENCE_THRESHOLD = 0.45
-MAX_REWRITE_ATTEMPTS = 2
 
 
 def post_retrieval_evaluator_node(state: GraphState, config: RunnableConfig) -> dict:

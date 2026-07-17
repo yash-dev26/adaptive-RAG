@@ -1,7 +1,5 @@
 from app.schemas.state import GraphState
-
-
-MAX_REWRITE_ATTEMPTS = 2
+from app.config.models import MAX_REWRITE_ATTEMPTS
 
 
 def route_after_evaluator(state: GraphState) -> str:

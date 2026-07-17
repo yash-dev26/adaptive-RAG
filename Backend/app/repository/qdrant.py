@@ -6,7 +6,7 @@ from qdrant_client.models import (
 )
 from app.config.qdrantConfig import qdrant_client
 from app.config.server import config
-from time import sleep
+from asyncio import sleep
 
 def _ensure_payload_index(collection_name: str, field_name: str, field_schema):
     qdrant_client.create_payload_index(
@@ -73,7 +73,7 @@ async def store_in_qdrant(
                 if attempt < MAX_RETRIES:
                     wait = 2 ** attempt
                     print(f"[qdrant] upsert batch {i}:{i+len(batch)} failed (attempt {attempt}), retrying in {wait}s: {e}")
-                    sleep(wait)
+                    await sleep(wait)
                     continue
                 else:
                     print(f"[qdrant] upsert batch {i}:{i+len(batch)} failed (attempt {attempt}), giving up: {e}")

@@ -1,9 +1,6 @@
 import logging
 
-from app.config.reranking_models import (
-    RERANKER_MODEL,
-    get_reranker_client,
-)
+from app.config.rerankerModel import RERANKER_MODEL, get_reranker
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +15,7 @@ def rerank(query: str, docs: list[dict], top_k: int = 4) -> list[dict]:
         return []
 
     try:
-        client = get_reranker_client()
+        client = get_reranker()
 
         response = client.rerank(
             model=RERANKER_MODEL,

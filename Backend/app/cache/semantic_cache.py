@@ -1,8 +1,8 @@
 import json
 import time
-import uuid
-import numpy as np
 from uuid import uuid4
+
+from qdrant_client.models import IsEmptyCondition, PayloadField
 
 from app.ingestion.embeddings import gen_embeddings
 from app.repository.qdrant import qdrant_client
@@ -10,13 +10,6 @@ from app.config.server import config
 
 
 SIMILARITY_THRESHOLD = 0.72  # tune later
-
-
-def cosine_similarity(a, b):
-    a = np.array(a)
-    b = np.array(b)
-    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
-
 
 
 def get_semantic_cached_response(query: str, user_id: str, file_id: str | None, openai_api_key: str):
@@ -32,7 +25,12 @@ def get_semantic_cached_response(query: str, user_id: str, file_id: str | None, 
     ]
 
     if file_id is not None:
-        must_conditions.insert(1, {"key": "file_id", "match": {"value": file_id}})
+        must_conditions.append({"key": "file_id", "match": {"value": file_id}})
+    else:
+        
+        must_conditions.append(
+            IsEmptyCondition(is_empty=PayloadField(key="file_id"))
+        )
 
     results = qdrant_client.query_points(
         collection_name=config["semantic_cache_collection_name"],

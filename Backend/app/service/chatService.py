@@ -1,94 +1,14 @@
-import json
-from app.schemas import response
 from app.schemas.request import ChatRequest
 from app.schemas.state import GraphState
 from app.cache.response_cache import get_cached_response, set_cached_response
 from app.cache.semantic_cache import get_semantic_cached_response, set_semantic_cache
 from app.service.threadService import record_turn
-
-from uuid import uuid4
-
-
-STREAMABLE_NODES = {
-    "pre_planner",
-    "multi_rewrite",
-    "single_rewrite",
-    "retrieve",
-    "evaluator",
-    "trim_docs",
-    "rerank",
-    "generate",
-    "llm",
-}
-
-
-NODE_DETAILS = {
-    "pre_planner": "Planning whether retrieval is needed.",
-    "multi_rewrite": "Expanding the query into multiple retrieval variants.",
-    "single_rewrite": "Rewriting the query for a targeted retrieval pass.",
-    "retrieve": "Searching the vector store for relevant context.",
-    "evaluator": "Evaluating retrieved context quality.",
-    "trim_docs": "Trimming context to fit the prompt window.",
-    "rerank": "Reranking retrieved documents.",
-    "generate": "Generating the final answer from context.",
-    "llm": "Generating the final answer without retrieval.",
-}
-
-
-def _format_sse(event_type: str, payload: dict) -> str:
-    return f"event: {event_type}\ndata: {json.dumps(payload, default=str)}\n\n"
-
-
-def _extract_event_output(event: dict):
-    data = event.get("data") or {}
-
-    if isinstance(data, dict):
-        return data.get("output") or data.get("chunk") or data.get("result") or data
-
-    return data
-
-
-def _extract_node_name(event: dict) -> str | None:
-    metadata = event.get("metadata") or {}
-    return metadata.get("langgraph_node") or event.get("name")
-
-
-def _node_detail(node_name: str, status: str) -> str:
-    base_detail = NODE_DETAILS.get(node_name, f"Executing {node_name}.")
-
-    if status == "done":
-        return base_detail
-
-    return base_detail
-
-def _resolve_thread_id(request: ChatRequest, session_id: str) -> str:
-    if request.thread_id:
-        return request.thread_id
-
-    if request.file_id:
-        return f"{session_id}:{request.file_id}"
-
-    return f"{session_id}:{uuid4()}"
-
-
-def _build_run_config(thread_id: str, api_keys: dict) -> dict:
-    """
-    BYOK keys go into `configurable`, NOT into GraphState — GraphState is
-    what MongoDBSaver checkpoints on every turn (that's how conversation
-    memory works), and we don't want a user's API key written to Mongo.
-    `configurable` is per-invocation only; nodes read it via extract_keys().
-    """
-    return {
-        "configurable": {
-            "thread_id": thread_id,
-            "openai_api_key": api_keys["openai_api_key"],
-            "groq_api_key": api_keys.get("groq_api_key"),
-        }
-    }
+from app.service.graphRunner import resolve_thread_id, build_run_config
+from app.service.sse import STREAMABLE_NODES, format_sse, node_detail
 
 
 async def process_chat(request: ChatRequest, graph, session_id: str, api_keys: dict):
-    thread_id = _resolve_thread_id(request, session_id)
+    thread_id = resolve_thread_id(request, session_id)
     openai_api_key = api_keys["openai_api_key"]
 
     record_turn(thread_id, session_id, request.file_id, request.file_name, request.query)
@@ -129,7 +49,7 @@ async def process_chat(request: ChatRequest, graph, session_id: str, api_keys: d
         file_id=request.file_id if request.file_id else None
     )
 
-    invoke_config = _build_run_config(thread_id, api_keys)
+    invoke_config = build_run_config(thread_id, api_keys)
 
     result = graph.invoke(state, config=invoke_config) if graph else None
 
@@ -181,7 +101,6 @@ async def process_chat(request: ChatRequest, graph, session_id: str, api_keys: d
                     openai_api_key,
                 )
 
-
         set_cached_response(
             user_id=session_id,
             file_id=request.file_id,
@@ -199,12 +118,12 @@ async def process_chat(request: ChatRequest, graph, session_id: str, api_keys: d
 
 
 async def stream_chat_events(request: ChatRequest, graph, session_id: str, api_keys: dict):
-    thread_id = _resolve_thread_id(request, session_id)
+    thread_id = resolve_thread_id(request, session_id)
     openai_api_key = api_keys["openai_api_key"]
 
     record_turn(thread_id, session_id, request.file_id, request.file_name, request.query)
 
-    yield _format_sse(
+    yield format_sse(
         "status",
         {
             "type": "status",
@@ -222,7 +141,7 @@ async def stream_chat_events(request: ChatRequest, graph, session_id: str, api_k
     )
 
     if semantic_hit:
-        yield _format_sse(
+        yield format_sse(
             "cache_hit",
             {
                 "type": "cache_hit",
@@ -231,7 +150,7 @@ async def stream_chat_events(request: ChatRequest, graph, session_id: str, api_k
                 "thread_id": thread_id,
             },
         )
-        yield _format_sse(
+        yield format_sse(
             "final",
             {
                 "type": "final",
@@ -250,7 +169,7 @@ async def stream_chat_events(request: ChatRequest, graph, session_id: str, api_k
     )
 
     if cached_response:
-        yield _format_sse(
+        yield format_sse(
             "cache_hit",
             {
                 "type": "cache_hit",
@@ -259,7 +178,7 @@ async def stream_chat_events(request: ChatRequest, graph, session_id: str, api_k
                 "thread_id": thread_id,
             },
         )
-        yield _format_sse(
+        yield format_sse(
             "final",
             {
                 "type": "final",
@@ -271,7 +190,7 @@ async def stream_chat_events(request: ChatRequest, graph, session_id: str, api_k
         )
         return
 
-    yield _format_sse(
+    yield format_sse(
         "status",
         {
             "type": "status",
@@ -287,7 +206,7 @@ async def stream_chat_events(request: ChatRequest, graph, session_id: str, api_k
         file_id=request.file_id if request.file_id else None,
     )
 
-    invoke_config = _build_run_config(thread_id, api_keys)
+    invoke_config = build_run_config(thread_id, api_keys)
 
     response_text = None
     confidence = None
@@ -305,13 +224,13 @@ async def stream_chat_events(request: ChatRequest, graph, session_id: str, api_k
                 if node_name not in STREAMABLE_NODES:
                     continue
 
-                yield _format_sse(
+                yield format_sse(
                     "node",
                     {
                         "type": "node",
                         "node": node_name,
                         "status": "running",
-                        "detail": _node_detail(node_name, "running"),
+                        "detail": node_detail(node_name, "running"),
                     },
                 )
 
@@ -321,7 +240,7 @@ async def stream_chat_events(request: ChatRequest, graph, session_id: str, api_k
                     if output.get("confidence") is not None:
                         confidence = output.get("confidence")
                     if output.get("rewritten_query"):
-                        yield _format_sse(
+                        yield format_sse(
                             "status",
                             {
                                 "type": "status",
@@ -331,13 +250,13 @@ async def stream_chat_events(request: ChatRequest, graph, session_id: str, api_k
                             },
                         )
 
-                yield _format_sse(
+                yield format_sse(
                     "node",
                     {
                         "type": "node",
                         "node": node_name,
                         "status": "done",
-                        "detail": _node_detail(node_name, "done"),
+                        "detail": node_detail(node_name, "done"),
                     },
                 )
 
@@ -382,7 +301,7 @@ async def stream_chat_events(request: ChatRequest, graph, session_id: str, api_k
                 response=response_text,
             )
 
-        yield _format_sse(
+        yield format_sse(
             "final",
             {
                 "type": "final",
@@ -393,7 +312,7 @@ async def stream_chat_events(request: ChatRequest, graph, session_id: str, api_k
             },
         )
     except Exception as exc:
-        yield _format_sse(
+        yield format_sse(
             "error",
             {
                 "type": "error",

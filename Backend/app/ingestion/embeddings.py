@@ -31,7 +31,7 @@ def gen_embeddings(text: str, openai_api_key: str) -> List[float]:
     )
     embedding = response.data[0].embedding
     # Store the embedding in the cache
-    redis_client.set(cache_key, json.dumps(embedding))
+    redis_client.set(cache_key, json.dumps(embedding), ex=60 * 60 * 24)  # Cache for 24 hours
     return embedding
 
 def _embed_batch(texts: List[str], openai_api_key: str) -> List[List[float]]:

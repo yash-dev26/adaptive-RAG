@@ -10,3 +10,5 @@ PLANNER_MODEL = "llama-3.3-70b-versatile"
 
 OPENAI_DEFAULT_MODEL = "gpt-4.1-mini"
 GROQ_FAST_MODEL = "llama-3.3-70b-versatile"
+
+MAX_REWRITE_ATTEMPTS = 2

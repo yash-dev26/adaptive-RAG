@@ -10,6 +10,30 @@ from app.config.rate_limiter import limiter
 
 router = APIRouter()
 
+MAX_UPLOAD_SIZE_BYTES = 20 * 1024 * 1024  # 20 MB
+UPLOAD_READ_CHUNK_SIZE = 1024 * 1024  # 1 MB per read
+
+
+async def _read_with_size_cap(file: UploadFile, max_bytes: int) -> bytes:
+  
+    chunks = []
+    total = 0
+
+    while True:
+        chunk = await file.read(UPLOAD_READ_CHUNK_SIZE)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File exceeds the {max_bytes // (1024 * 1024)}MB upload limit",
+            )
+        chunks.append(chunk)
+
+    return b"".join(chunks)
+
+
 @router.post("/")
 @limiter.limit("2/minute")
 async def ingest(
@@ -30,7 +54,7 @@ async def ingest(
     upload_dir.mkdir(parents=True, exist_ok=True)
     stored_path = upload_dir / f"{file_id}{suffix}"
 
-    content = await file.read()
+    content = await _read_with_size_cap(file, MAX_UPLOAD_SIZE_BYTES)
     content_hash = hashlib.sha256(content).hexdigest()
     stored_path.write_bytes(content)
 
