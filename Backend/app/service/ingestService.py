@@ -27,7 +27,7 @@ async def ingest_data(request, openai_api_key: str):
     try:
         text = load_file(request.file_path)
     except Exception:
-        raise HTTPException(status_code=400, detail="Uploaded file is not a valid PDF")
+        raise HTTPException(status_code=400, detail="Uploaded file could not be parsed")
 
     chunks = split_text(text)
     print(f"Split text into chunks: {len(chunks)} chunks")

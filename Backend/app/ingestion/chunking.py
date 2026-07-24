@@ -1,15 +1,24 @@
 import pymupdf4llm
+import docx2txt
+from pathlib import Path
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 
 def load_file(file_path: str):
-    markdown_pages = pymupdf4llm.to_markdown(
-        file_path,
-        page_chunks=True,
-    )
+    suffix = Path(file_path).suffix.lower()
 
-    return markdown_pages
+    if suffix == ".pdf":
+        return pymupdf4llm.to_markdown(file_path, page_chunks=True)
 
+    if suffix == ".txt":
+        text = Path(file_path).read_text(encoding="utf-8", errors="ignore")
+        return [{"text": text, "metadata": {"page": 0}}]
+
+    if suffix == ".docx":
+        text = docx2txt.process(file_path)
+        return [{"text": text, "metadata": {"page": 0}}]
+
+    raise ValueError(f"Unsupported file type: {suffix}")
 
 def split_text(pages):
     splitter = RecursiveCharacterTextSplitter(

@@ -3,6 +3,8 @@ from qdrant_client.models import (
     Distance,
     PointStruct,
     PayloadSchemaType,
+    SparseVectorParams,
+    Modifier,
 )
 from app.config.qdrantConfig import qdrant_client
 from app.config.server import config
@@ -22,9 +24,17 @@ def ensure_collections():
     if config["qdrant_collection_name"] not in existing:
         qdrant_client.create_collection(
             collection_name=config["qdrant_collection_name"],
-            vectors_config=VectorParams(size=384, distance=Distance.COSINE),
+            vectors_config={
+                "dense": VectorParams(size=384, distance=Distance.COSINE),
+            },
+            sparse_vectors_config={
+                # Modifier.IDF: Qdrant applies IDF weighting server-side using
+                # its own corpus stats, since fastembed's BM25 doc vectors only
+                # carry saturated term frequency, not IDF.
+                "sparse": SparseVectorParams(modifier=Modifier.IDF),
+            },
         )
-        print(f"[qdrant] Created collection '{config['qdrant_collection_name']}'.")
+        print(f"[qdrant] Created collection '{config['qdrant_collection_name']}' (hybrid dense+sparse).")
     else:
         print(f"[qdrant] Collection '{config['qdrant_collection_name']}' exists.")
 
@@ -43,8 +53,7 @@ def ensure_collections():
     _ensure_payload_index(config["semantic_cache_collection_name"], "user_id", PayloadSchemaType.KEYWORD)
     _ensure_payload_index(config["semantic_cache_collection_name"], "file_id", PayloadSchemaType.KEYWORD)
     _ensure_payload_index(config["semantic_cache_collection_name"], "expires_at", PayloadSchemaType.INTEGER)
-
-
+    
 async def store_in_qdrant(
     collection_name: str, data: list[dict], file_id: str, user_id: str
 ):

@@ -46,8 +46,8 @@ async def ingest(
         raise HTTPException(status_code=400, detail="No file uploaded")
 
     suffix = Path(file.filename).suffix.lower()
-    if suffix != ".pdf":
-        raise HTTPException(status_code=400, detail="Only PDF uploads are supported")
+    if suffix not in [".pdf", ".txt", ".docx"]:
+        raise HTTPException(status_code=400, detail="Only PDF, TXT, and DOCX uploads are supported")
 
     file_id = str(uuid4())
     upload_dir = Path(__file__).resolve().parents[4] / "uploaded_files"

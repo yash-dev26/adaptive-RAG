@@ -1,3 +1,5 @@
+from openai import AuthenticationError
+from fastapi import HTTPException
 from app.config.providers import get_openai_client, get_groq_client
 from app.config.models import OPENAI_DEFAULT_MODEL, GROQ_FAST_MODEL
 
@@ -10,6 +12,7 @@ def generate_completion(
     temperature: float = 0,
     response_format=None,
 ):
+    
     if not openai_api_key:
         raise ValueError("openai_api_key is required (used as the fallback provider too)")
 
@@ -22,14 +25,17 @@ def generate_completion(
 
     if provider == "openai":
         client = get_openai_client(openai_api_key)
-        response = client.chat.completions.create(
-            model=model or OPENAI_DEFAULT_MODEL,
-            messages=messages,
-            temperature=temperature,
-            response_format=response_format,
-        )
+        try:
+            response = client.chat.completions.create(
+                model=model or OPENAI_DEFAULT_MODEL,
+                messages=messages,
+                temperature=temperature,
+                response_format=response_format,
+            )
+        except AuthenticationError:
+            raise HTTPException(status_code=401, detail="Invalid OpenAI API key")
         return response.choices[0].message.content
-
+    
     elif provider == "groq":
         try:
             client = get_groq_client(groq_api_key)
@@ -41,13 +47,18 @@ def generate_completion(
             return response.choices[0].message.content
 
         except Exception as e:
+            # Groq is optional — any failure here (bad key, rate limit, outage)
+            # falls back to the required openai key, same as before.
             print(f"[groq fallback] {e}")
             client = get_openai_client(openai_api_key)
-            response = client.chat.completions.create(
-                model=OPENAI_DEFAULT_MODEL,
-                messages=messages,
-                temperature=temperature,
-            )
+            try:
+                response = client.chat.completions.create(
+                    model=OPENAI_DEFAULT_MODEL,
+                    messages=messages,
+                    temperature=temperature,
+                )
+            except AuthenticationError:
+                raise HTTPException(status_code=401, detail="Invalid OpenAI API key")
             return response.choices[0].message.content
 
     raise ValueError(f"Unsupported provider: {provider}")
