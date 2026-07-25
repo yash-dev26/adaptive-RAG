@@ -2,7 +2,7 @@
 
 A Retrieval-Augmented Generation system that doesn't just retrieve-then-generate — it **plans** whether retrieval is needed, **rewrites** queries that won't retrieve well, **grades** what comes back (CRAG-style), and only then decides how to answer. Built with FastAPI, LangGraph, Qdrant, Redis, MongoDB, Cohere, and a React/Vite frontend.
 
-**[Live demo →](https://adaptive-rag-1.vercel.app/)** 
+**[Live demo →](https://adaptive-rag-1.vercel.app/)**
 
 It's a bring-your-own-key (BYOK) app — there's no login and no server-side inference cost. You supply an OpenAI key (required) and optionally a Groq key from a modal in the UI; the backend uses them per-request and never persists them.
 
@@ -18,6 +18,17 @@ It's a bring-your-own-key (BYOK) app — there's no login and no server-side inf
 ![TailwindCSS](https://img.shields.io/badge/-Tailwind-14161A?style=flat-square&logo=tailwindcss&logoColor=06B6D4)
 ![OpenAI](https://img.shields.io/badge/-OpenAI-14161A?style=flat-square&logo=openai&logoColor=FFFFFF)
 ![Groq](https://img.shields.io/badge/-Groq-14161A?style=flat-square&logo=groq&logoColor=F55036)
+
+---
+
+## At a glance
+
+- **A real decision-making pipeline, not a demo wrapper around an LLM call.** Three independent routing points (retrieve-or-not, rewrite-or-not, rerank-or-not) implemented as a LangGraph state machine — every node and edge below maps directly to code, not a simplified diagram of an aspiration.
+- **Multi-provider inference with cost-awareness baked in**: Groq for cheap/fast orchestration steps (rewriting, intent classification), OpenAI reserved for user-facing generation and grading, Cohere only invoked when ranking is genuinely ambiguous. All behind one abstraction with automatic fallback.
+- **Three-layer caching** (embedding / exact-response / semantic) with correct multi-tenant scoping — including a fix for a real bug class (no-file queries being served file-scoped cached answers).
+- **No auth, but real isolation**: BYOK session model where API keys are read per-request, threaded through LangGraph config, and never written to a persisted checkpoint.
+- **Full conversation memory**: MongoDB-backed thread history with a session sidebar, so users can pick up a past conversation and see which document it was grounded in.
+- **Streaming transparency**: the frontend renders each LangGraph node as a live SSE event, so the adaptive routing is visible to the user in real time instead of a spinner hiding a black box.
 
 ---
 
@@ -41,7 +52,7 @@ The result is a graph, not a pipeline — built and executed with LangGraph.
 ```mermaid
 flowchart TD
     subgraph Client["React Client (Vite)"]
-        UI["Chat UI + BYOK key modal"]
+        UI["Chat UI + BYOK key modal + session sidebar"]
     end
 
     subgraph API["FastAPI"]
@@ -181,6 +192,12 @@ The frontend renders each `node` SSE event as a live pipeline trace ("Rewriting 
 
 ---
 
+## Conversation memory & threads
+
+Every turn is recorded to MongoDB against a `thread_id`, and thread titles are derived automatically — from the uploaded filename if a document is attached, otherwise from the query itself. The session sidebar (`SessionSidebar.jsx` + `useThreads.js`) lists past conversations per browser session; reopening one restores both the message history and which file it was grounded in, so a thread never loses context about what document it was actually answering questions from.
+
+---
+
 ## Retrieval-augmented caching (three layers)
 
 | Layer | Store | Key | TTL | Purpose |
@@ -310,6 +327,15 @@ VITE_API_BASE_URL=http://127.0.0.1:8000/api/v1
 
 ---
 
+## Tech stack
+
+**Backend:** Python 3.11, FastAPI, LangGraph, LangChain, Qdrant, Redis, MongoDB, slowapi (rate limiting), pymupdf4llm
+**LLM/inference:** OpenAI (gpt-4.1-mini, text-embedding-3-small), Groq (Llama 3.3 70B), Cohere (rerank-v3.5)
+**Frontend:** React 19, Vite, Tailwind CSS 4, React Router, react-markdown, axios
+**Infra:** Vercel (frontend), and any ASGI host for the backend (Render/Railway/Fly, etc.)
+
+---
+
 ## What this project demonstrates
 
 - **Adaptive orchestration over a fixed pipeline** — LangGraph state machine with conditional routing at three separate decision points (plan, evaluate, rerank-or-not), not a linear retrieve→generate chain.
@@ -317,4 +343,5 @@ VITE_API_BASE_URL=http://127.0.0.1:8000/api/v1
 - **Cost-aware multi-provider inference** — fast/cheap provider for high-frequency orchestration calls, higher-quality provider reserved for user-facing output, with automatic fallback.
 - **Layered caching** — embedding, exact-response, and semantic caches, each with an appropriate TTL and scope, plus a background expiry sweep.
 - **Correct multi-user isolation without real auth** — BYOK session model with retrieval-time payload filtering by `user_id`/`file_id`, and cache-scoping bugs (e.g. no-file queries matching file-scoped cache entries) treated as seriously as auth bugs would be.
+- **Conversation memory that's actually useful** — MongoDB-backed threads with auto-derived titles and persisted document context, not just a chat log.
 - **Streaming transparency** — SSE node-by-node trace so the adaptive decisions are visible to the end user in real time, not just in server logs.
