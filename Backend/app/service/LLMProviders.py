@@ -2,7 +2,9 @@ from openai import AuthenticationError
 from fastapi import HTTPException
 from app.config.providers import get_openai_client, get_groq_client
 from app.config.models import OPENAI_DEFAULT_MODEL, GROQ_FAST_MODEL
+from app.utils.retry import external_api_retry
 
+@external_api_retry()
 def generate_completion(
     provider: str,
     messages: list,

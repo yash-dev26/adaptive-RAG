@@ -2,7 +2,7 @@ from http.client import HTTPException
 from uuid import uuid4
 from typing import List
 
-from openai import AuthenticationError
+from openai import APIStatusError, AuthenticationError, RateLimitError, APIConnectionError
 import json
 
 from fastapi import HTTPException
@@ -14,13 +14,14 @@ from app.config.server import config
 from app.config.providers import get_openai_client
 from app.cache.embeddings_cache import _embedding_cache_key
 from app.ingestion.sparse_embeddings import gen_sparse_document_embeddings
+from app.utils.retry import external_api_retry
 
 EMBEDDING_MODEL = "text-embedding-3-small"
 EMBEDDING_DIMENSION = 384
 BATCH_SIZE = 512
 EMBED_TIMEOUT_SEC = float(os.getenv("OPENAI_EMBED_TIMEOUT_SEC", "45"))
 
-
+@external_api_retry()
 def gen_embeddings(text: str, openai_api_key: str) -> List[float]:
     cache_key = _embedding_cache_key(text)
     cached_embedding = redis_client.get(cache_key)
@@ -38,6 +39,7 @@ def gen_embeddings(text: str, openai_api_key: str) -> List[float]:
     redis_client.set(cache_key, json.dumps(embedding), ex=60 * 60 * 24)
     return embedding
 
+@external_api_retry()
 def _embed_batch(texts: List[str], openai_api_key: str) -> List[List[float]]:
     client = get_openai_client(openai_api_key)
     try :
@@ -49,6 +51,7 @@ def _embed_batch(texts: List[str], openai_api_key: str) -> List[List[float]]:
         )
     except AuthenticationError:
         raise HTTPException(status_code=401, detail="Invalid OpenAI API key")
+    
     return [item.embedding for item in sorted(response.data, key=lambda x: x.index)]
     
 
