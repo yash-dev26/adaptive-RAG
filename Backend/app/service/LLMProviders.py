@@ -5,7 +5,7 @@ from app.config.models import OPENAI_DEFAULT_MODEL, GROQ_FAST_MODEL
 from app.utils.retry import external_api_retry
 
 @external_api_retry()
-def generate_completion(
+async def generate_completion(
     provider: str,
     messages: list,
     openai_api_key: str,
@@ -28,7 +28,7 @@ def generate_completion(
     if provider == "openai":
         client = get_openai_client(openai_api_key)
         try:
-            response = client.chat.completions.create(
+            response = await client.chat.completions.create(
                 model=model or OPENAI_DEFAULT_MODEL,
                 messages=messages,
                 temperature=temperature,
@@ -41,7 +41,7 @@ def generate_completion(
     elif provider == "groq":
         try:
             client = get_groq_client(groq_api_key)
-            response = client.chat.completions.create(
+            response = await client.chat.completions.create(
                 model=model or GROQ_FAST_MODEL,
                 messages=messages,
                 temperature=temperature,
@@ -54,7 +54,7 @@ def generate_completion(
             print(f"[groq fallback] {e}")
             client = get_openai_client(openai_api_key)
             try:
-                response = client.chat.completions.create(
+                response = await client.chat.completions.create(
                     model=OPENAI_DEFAULT_MODEL,
                     messages=messages,
                     temperature=temperature,

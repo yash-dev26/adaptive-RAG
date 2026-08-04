@@ -26,9 +26,9 @@ def derive_title_from_filename(file_name: str) -> str:
     return _truncate(stem)
 
 
-def record_turn(thread_id: str, session_id: str, file_id: str | None, file_name: str | None, query: str) -> None:
+async def record_turn(thread_id: str, session_id: str, file_id: str | None, file_name: str | None, query: str) -> None:
     
-    existing = chatSessions.get_thread(thread_id)
+    existing = await chatSessions.get_thread(thread_id)
     already_had_file = bool(existing and existing.get("file_id"))
 
     title_override = None
@@ -37,7 +37,7 @@ def record_turn(thread_id: str, session_id: str, file_id: str | None, file_name:
     elif file_name and not already_had_file:
         title_override = derive_title_from_filename(file_name)
 
-    chatSessions.upsert_thread(
+    await chatSessions.upsert_thread(
         thread_id=thread_id,
         session_id=session_id,
         file_id=file_id,
@@ -46,8 +46,8 @@ def record_turn(thread_id: str, session_id: str, file_id: str | None, file_name:
     )
 
 
-def list_threads_for_session(session_id: str) -> list[ThreadSummary]:
-    rows = chatSessions.list_threads(session_id)
+async def list_threads_for_session(session_id: str) -> list[ThreadSummary]:
+    rows = await chatSessions.list_threads(session_id)
     return [
         ThreadSummary(
             thread_id=row["thread_id"],
@@ -61,8 +61,8 @@ def list_threads_for_session(session_id: str) -> list[ThreadSummary]:
     ]
 
 
-def get_thread_messages(thread_id: str, session_id: str, graph) -> list[ThreadMessage]:
-    owner = chatSessions.get_thread_owner(thread_id)
+async def get_thread_messages(thread_id: str, session_id: str, graph) -> list[ThreadMessage]:
+    owner = await chatSessions.get_thread_owner(thread_id)
 
     # Same 404 for "doesn't exist" and "exists but isn't yours" — confirming
     # a thread_id belongs to someone else is itself a small information leak.

@@ -77,13 +77,13 @@ def _is_ambiguous(query: str) -> bool:
     words = set(query.lower().split())
     return bool(words & ambiguous_signals)
 
-def _classify_intent(
+async def _classify_intent(
     query: str,
     openai_api_key: str,
     groq_api_key: str | None,
 ) -> str:
     try:
-        response_text = generate_completion(
+        response_text = await generate_completion(
             provider=PLANNER_PROVIDER,
             model=PLANNER_MODEL,
             openai_api_key=openai_api_key,
@@ -117,7 +117,7 @@ def _classify_intent(
 
 
 
-def pre_retrieval_planner_node(state: GraphState, config: RunnableConfig) -> dict:
+async def pre_retrieval_planner_node(state: GraphState, config: RunnableConfig) -> dict:
     print("[flow] entering pre_retrieval_planner_node")
     query = state.query.strip()
 
@@ -134,7 +134,7 @@ def pre_retrieval_planner_node(state: GraphState, config: RunnableConfig) -> dic
 
     openai_api_key, groq_api_key = extract_keys(config)
 
-    intent = _classify_intent(
+    intent = await _classify_intent(
         query=query,
         openai_api_key=openai_api_key,
         groq_api_key=groq_api_key,

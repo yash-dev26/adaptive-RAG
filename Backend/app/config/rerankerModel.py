@@ -1,4 +1,4 @@
-import cohere
+from cohere import AsyncClientV2
 
 from app.config.server import config
 
@@ -11,7 +11,7 @@ def get_reranker():
     global _client
 
     if _client is None:
-        _client = cohere.ClientV2(
+        _client = AsyncClientV2(
             api_key=config.get("cohere_api_key")
         )
 

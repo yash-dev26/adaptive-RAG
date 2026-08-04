@@ -8,24 +8,24 @@ from app.config.qdrantConfig import qdrant_client
 router = APIRouter()
 
 
-def _check_mongo() -> bool:
+async def _check_mongo() -> bool:
     try:
-        get_mongo_client().admin.command("ping")
+        await get_mongo_client().admin.command("ping")
         return True
     except Exception:
         return False
 
 
-def _check_redis() -> bool:
+async def _check_redis() -> bool:
     try:
-        return bool(redis_client.ping())
+        return bool(await redis_client.ping())
     except Exception:
         return False
 
 
-def _check_qdrant() -> bool:
+async def _check_qdrant() -> bool:
     try:
-        qdrant_client.get_collections()
+        await qdrant_client.get_collections()
         return True
     except Exception:
         return False
@@ -37,9 +37,9 @@ async def health():
     Note: this does a live round-trip to each dependency on every call
     """
     checks = {
-        "mongo": _check_mongo(),
-        "redis": _check_redis(),
-        "qdrant": _check_qdrant(),
+        "mongo": await _check_mongo(),
+        "redis": await _check_redis(),
+        "qdrant": await _check_qdrant(),
     }
     all_healthy = all(checks.values())
 

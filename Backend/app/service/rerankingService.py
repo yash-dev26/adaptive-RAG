@@ -6,9 +6,9 @@ logger = logging.getLogger(__name__)
 
 
 @external_api_retry(max_attempts=2)
-def _do_rerank(client, model, query, docs, top_k):
-    return client.rerank(model=model, query=query, documents=docs, top_n=top_k)
-def rerank(query: str, docs: list[dict], top_k: int = 4) -> list[dict]:
+async def _do_rerank(client, model, query, docs, top_k):
+    return await client.rerank(model=model, query=query, documents=docs, top_n=top_k)
+async def rerank(query: str, docs: list[dict], top_k: int = 4) -> list[dict]:
     """
     Reranks retrieved documents and returns the top_k most relevant.
     Falls back to retrieval order if reranking fails.
@@ -20,7 +20,7 @@ def rerank(query: str, docs: list[dict], top_k: int = 4) -> list[dict]:
     try:
         client = get_reranker()
 
-        response = _do_rerank(client, RERANKER_MODEL, query, [d["text"] for d in docs], top_k)
+        response = await _do_rerank(client, RERANKER_MODEL, query, [d["text"] for d in docs], top_k)
 
         reranked_docs = []
 

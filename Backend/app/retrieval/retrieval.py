@@ -18,7 +18,7 @@ def _build_filter(file_id: str | None, user_id: str | None):
     return Filter(must=filter_conditions) if filter_conditions else None
 
 
-def retrieve_relevant_documents(
+async def retrieve_relevant_documents(
     query: str,
     openai_api_key: str,
     top_k: int = 5,
@@ -34,26 +34,28 @@ def retrieve_relevant_documents(
     """
     payload_filter = _build_filter(file_id, user_id)
 
-    dense_embedding = gen_embeddings(query, openai_api_key)
+    dense_embedding = await gen_embeddings(query, openai_api_key)
     sparse_embedding = gen_sparse_query_embedding(query)
 
-    dense_hits = qdrant_client.query_points(
+    dense_hits = await qdrant_client.query_points(
         collection_name=config["qdrant_collection_name"],
         query=dense_embedding,
         using="dense",
         query_filter=payload_filter,
         limit=top_k,
         with_payload=True,
-    ).points
+    )
+    dense_hits = dense_hits.points
 
-    sparse_hits = qdrant_client.query_points(
+    sparse_hits = await qdrant_client.query_points(
         collection_name=config["qdrant_collection_name"],
         query=sparse_embedding,
         using="sparse",
         query_filter=payload_filter,
         limit=top_k,
         with_payload=True,
-    ).points
+    )
+    sparse_hits = sparse_hits.points
 
     dense_ranking = [
         {

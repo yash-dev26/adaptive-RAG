@@ -6,7 +6,7 @@ from fastapi import HTTPException
 
 async def ingest_data(request, openai_api_key: str):
     print(f"[ingest] Starting ingestion for user_id={request.user_id}, file_id={request.file_id}")
-    existing_file_id = find_existing_file_id_by_content_hash(
+    existing_file_id = await find_existing_file_id_by_content_hash(
         collection_name=config["qdrant_collection_name"],
         user_id=request.user_id,
         content_hash=request.content_hash,

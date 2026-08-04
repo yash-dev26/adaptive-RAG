@@ -12,8 +12,8 @@ from app.config.server import config
 SIMILARITY_THRESHOLD = 0.72  # tune later
 
 
-def get_semantic_cached_response(query: str, user_id: str, file_id: str | None, openai_api_key: str):
-    query_embedding = gen_embeddings(query, openai_api_key)
+async def get_semantic_cached_response(query: str, user_id: str, file_id: str | None, openai_api_key: str):
+    query_embedding = await gen_embeddings(query, openai_api_key)
     current_time = int(time.time())
 
     must_conditions = [
@@ -32,14 +32,15 @@ def get_semantic_cached_response(query: str, user_id: str, file_id: str | None, 
             IsEmptyCondition(is_empty=PayloadField(key="file_id"))
         )
 
-    results = qdrant_client.query_points(
+    results = await qdrant_client.query_points(
         collection_name=config["semantic_cache_collection_name"],
         query=query_embedding,
         query_filter={
             "must": must_conditions
         },
         limit=1
-    ).points
+    )
+    results = results.points
 
     if not results:
         return None
@@ -56,12 +57,12 @@ def get_semantic_cached_response(query: str, user_id: str, file_id: str | None, 
     return None
 
 
-def set_semantic_cache(query, response, user_id, file_id, openai_api_key: str):
-    embedding = gen_embeddings(query, openai_api_key)
+async def set_semantic_cache(query, response, user_id, file_id, openai_api_key: str):
+    embedding = await gen_embeddings(query, openai_api_key)
     now = int(time.time())
     ttl = 36000
 
-    qdrant_client.upsert(
+    await qdrant_client.upsert(
         collection_name=config["semantic_cache_collection_name"],
         points=[
             {

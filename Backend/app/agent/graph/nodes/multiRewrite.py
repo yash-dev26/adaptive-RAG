@@ -5,7 +5,7 @@ from app.config.models import REWRITE_MODEL, REWRITE_PROVIDER
 from app.agent.graph.keys import extract_keys
 from langchain_core.runnables import RunnableConfig
 
-def multi_query_rewrite_node(state: GraphState, config: RunnableConfig) -> dict:
+async def multi_query_rewrite_node(state: GraphState, config: RunnableConfig) -> dict:
     print("[flow] entering multi_query_rewrite_node")
     query = state.query
 
@@ -30,7 +30,7 @@ Return ONLY valid JSON in this exact shape:
 
     openai_api_key, groq_api_key = extract_keys(config)
 
-    response_text = generate_completion(
+    response_text = await generate_completion(
         provider=REWRITE_PROVIDER,
         model=REWRITE_MODEL,
         openai_api_key=openai_api_key,

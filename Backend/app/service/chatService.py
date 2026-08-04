@@ -11,9 +11,9 @@ async def process_chat(request: ChatRequest, graph, session_id: str, api_keys: d
     thread_id = resolve_thread_id(request, session_id)
     openai_api_key = api_keys["openai_api_key"]
 
-    record_turn(thread_id, session_id, request.file_id, request.file_name, request.query)
+    await record_turn(thread_id, session_id, request.file_id, request.file_name, request.query)
 
-    semantic_hit = get_semantic_cached_response(
+    semantic_hit = await get_semantic_cached_response(
         request.query,
         session_id,
         request.file_id,
@@ -27,7 +27,7 @@ async def process_chat(request: ChatRequest, graph, session_id: str, api_keys: d
             "cached": "semantic"
         }
 
-    cached_response = get_cached_response(
+    cached_response = await get_cached_response(
         user_id=session_id,
         file_id=request.file_id if request.file_id else None,
         query=request.query
@@ -72,7 +72,7 @@ async def process_chat(request: ChatRequest, graph, session_id: str, api_keys: d
 
     if confidence is None or confidence > 0.6:
         #Always store original query(fallback baseline)
-        set_semantic_cache(
+        await set_semantic_cache(
             request.query,
             response,
             session_id,
@@ -82,7 +82,7 @@ async def process_chat(request: ChatRequest, graph, session_id: str, api_keys: d
 
         #Store rewritten query(single)
         if rewritten_query:
-            set_semantic_cache(
+            await set_semantic_cache(
                 rewritten_query,
                 response,
                 session_id,
@@ -93,7 +93,7 @@ async def process_chat(request: ChatRequest, graph, session_id: str, api_keys: d
         #Store multi queries
         if queries:
             for q in queries:
-                set_semantic_cache(
+                await set_semantic_cache(
                     q,
                     response,
                     session_id,
@@ -101,7 +101,7 @@ async def process_chat(request: ChatRequest, graph, session_id: str, api_keys: d
                     openai_api_key,
                 )
 
-        set_cached_response(
+        await set_cached_response(
             user_id=session_id,
             file_id=request.file_id,
             query=request.query,
@@ -121,7 +121,7 @@ async def stream_chat_events(request: ChatRequest, graph, session_id: str, api_k
     thread_id = resolve_thread_id(request, session_id)
     openai_api_key = api_keys["openai_api_key"]
 
-    record_turn(thread_id, session_id, request.file_id, request.file_name, request.query)
+    await record_turn(thread_id, session_id, request.file_id, request.file_name, request.query)
 
     yield format_sse(
         "status",
@@ -133,7 +133,7 @@ async def stream_chat_events(request: ChatRequest, graph, session_id: str, api_k
         },
     )
 
-    semantic_hit = get_semantic_cached_response(
+    semantic_hit = await get_semantic_cached_response(
         request.query,
         session_id,
         request.file_id,
@@ -162,7 +162,7 @@ async def stream_chat_events(request: ChatRequest, graph, session_id: str, api_k
         )
         return
 
-    cached_response = get_cached_response(
+    cached_response = await get_cached_response(
         user_id=session_id,
         file_id=request.file_id if request.file_id else None,
         query=request.query,
@@ -286,7 +286,7 @@ async def stream_chat_events(request: ChatRequest, graph, session_id: str, api_k
             print(f"[chat] Warning: could not retrieve final state for sources: {e}")
 
         if confidence is None or confidence > 0.6:
-            set_semantic_cache(
+            await set_semantic_cache(
                 request.query,
                 response_text,
                 session_id,
@@ -294,7 +294,7 @@ async def stream_chat_events(request: ChatRequest, graph, session_id: str, api_k
                 openai_api_key,
             )
 
-            set_cached_response(
+            await set_cached_response(
                 user_id=session_id,
                 file_id=request.file_id,
                 query=request.query,

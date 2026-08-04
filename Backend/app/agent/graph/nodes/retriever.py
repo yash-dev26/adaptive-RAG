@@ -5,7 +5,7 @@ from app.agent.graph.keys import extract_keys
 from langchain_core.runnables import RunnableConfig
 
 
-def retrieve_node(state: GraphState, config: RunnableConfig) -> dict:
+async def retrieve_node(state: GraphState, config: RunnableConfig) -> dict:
     print("[flow] entering retrieve_node")
     base_query = state.rewritten_query or state.query
 
@@ -14,7 +14,7 @@ def retrieve_node(state: GraphState, config: RunnableConfig) -> dict:
     openai_api_key, _ = extract_keys(config)
 
     all_rankings = [
-        retrieve_relevant_documents(
+        await retrieve_relevant_documents(
             q,
             top_k=5,
             file_id=state.file_id,

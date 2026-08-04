@@ -18,7 +18,7 @@ def _to_openai_message(message) -> dict:
         "content": getattr(message, "content", ""),
     }
 
-def llm_node(state: GraphState, config: RunnableConfig):
+async def llm_node(state: GraphState, config: RunnableConfig):
     print("[flow] entering llm_node")
 
     SYSTEM_PROMPT = """You are a helpful assistant that answers user queries."""
@@ -35,7 +35,7 @@ def llm_node(state: GraphState, config: RunnableConfig):
 
     openai_api_key, groq_api_key = extract_keys(config)
 
-    response = generate_completion(
+    response = await generate_completion(
         provider=GENERATION_PROVIDER,
         model=GENERATION_MODEL,
         openai_api_key=openai_api_key,

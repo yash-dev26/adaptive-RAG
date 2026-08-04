@@ -12,7 +12,7 @@ def _to_openai_message(message) -> dict:
         "content": getattr(message, "content", ""),
     }
 
-def generate_node(state: GraphState, config: RunnableConfig):
+async def generate_node(state: GraphState, config: RunnableConfig):
     print("[flow] entering generate_node")
     query = state.query
     context = state.context
@@ -46,7 +46,7 @@ def generate_node(state: GraphState, config: RunnableConfig):
 
     openai_api_key, groq_api_key = extract_keys(config)
 
-    response = generate_completion(
+    response = await generate_completion(
         provider=GENERATION_PROVIDER,
         model=GENERATION_MODEL,
         openai_api_key=openai_api_key,

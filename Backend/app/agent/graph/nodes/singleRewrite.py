@@ -4,7 +4,7 @@ from app.config.models import REWRITE_MODEL, REWRITE_PROVIDER
 from app.agent.graph.keys import extract_keys
 from langchain_core.runnables import RunnableConfig
 
-def single_query_rewrite_node(state: GraphState, config: RunnableConfig):
+async def single_query_rewrite_node(state: GraphState, config: RunnableConfig):
     print("[flow] entering single_query_rewrite_node")
     query = state.query
     history = list(state.messages or [])
@@ -36,7 +36,7 @@ def single_query_rewrite_node(state: GraphState, config: RunnableConfig):
 
     openai_api_key, groq_api_key = extract_keys(config)
 
-    response_text = generate_completion(
+    response_text = await generate_completion(
         provider=REWRITE_PROVIDER,
         model=REWRITE_MODEL,
         openai_api_key=openai_api_key,

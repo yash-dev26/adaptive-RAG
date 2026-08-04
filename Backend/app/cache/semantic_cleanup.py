@@ -20,7 +20,7 @@ async def cleanup_semantic_cache(interval: int = 600):
 
             print("[cleanup] running semantic cache cleanup...")
 
-            qdrant_client.delete(
+            await qdrant_client.delete(
                 collection_name=collection_name,
                 points_selector=Filter(
                     must=[

@@ -1,8 +1,7 @@
-from http.client import HTTPException
 from uuid import uuid4
 from typing import List
 
-from openai import APIStatusError, AuthenticationError, RateLimitError, APIConnectionError
+from openai import AuthenticationError
 import json
 
 from fastapi import HTTPException
@@ -22,28 +21,28 @@ BATCH_SIZE = 512
 EMBED_TIMEOUT_SEC = float(os.getenv("OPENAI_EMBED_TIMEOUT_SEC", "45"))
 
 @external_api_retry()
-def gen_embeddings(text: str, openai_api_key: str) -> List[float]:
+async def gen_embeddings(text: str, openai_api_key: str) -> List[float]:
     cache_key = _embedding_cache_key(text)
-    cached_embedding = redis_client.get(cache_key)
+    cached_embedding = await redis_client.get(cache_key)
     if cached_embedding:
         return json.loads(cached_embedding)
 
     client = get_openai_client(openai_api_key)
-    response = client.embeddings.create(
+    response = await client.embeddings.create(
         model=EMBEDDING_MODEL,
         dimensions=EMBEDDING_DIMENSION,
         input=text,
         timeout=EMBED_TIMEOUT_SEC,
     )
     embedding = response.data[0].embedding
-    redis_client.set(cache_key, json.dumps(embedding), ex=60 * 60 * 24)
+    await redis_client.set(cache_key, json.dumps(embedding), ex=60 * 60 * 24)
     return embedding
 
 @external_api_retry()
-def _embed_batch(texts: List[str], openai_api_key: str) -> List[List[float]]:
+async def _embed_batch(texts: List[str], openai_api_key: str) -> List[List[float]]:
     client = get_openai_client(openai_api_key)
     try :
-        response = client.embeddings.create(
+        response = await client.embeddings.create(
         model=EMBEDDING_MODEL,
         dimensions=EMBEDDING_DIMENSION,
         input=texts,
@@ -74,7 +73,7 @@ async def gen_embeddingsAndStoreInQdrant(
 
         print(f"[embeddings] Dense embedding batch {batch_start}:{batch_end} (size={len(batch)})")
         try:
-            dense_embeddings = _embed_batch(batch_texts, openai_api_key)
+            dense_embeddings = await _embed_batch(batch_texts, openai_api_key)
         except Exception as e:
             print(f"[embeddings] Dense embedding batch failed at {batch_start}:{batch_end} -> {type(e).__name__}: {e}")
             raise

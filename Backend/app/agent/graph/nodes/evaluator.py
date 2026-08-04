@@ -9,7 +9,7 @@ HIGH_CONFIDENCE_THRESHOLD = 0.70
 LOW_CONFIDENCE_THRESHOLD = 0.45
 
 
-def post_retrieval_evaluator_node(state: GraphState, config: RunnableConfig) -> dict:
+async def post_retrieval_evaluator_node(state: GraphState, config: RunnableConfig) -> dict:
     print("[flow] entering post_retrieval_evaluator_node")
     query = state.query
     docs = state.context or []
@@ -128,7 +128,7 @@ Important Rules
 """
     openai_api_key, groq_api_key = extract_keys(config)
 
-    response_text = generate_completion(
+    response_text = await generate_completion(
         provider=EVALUATOR_PROVIDER,
         model=EVALUATOR_MODEL,
         openai_api_key=openai_api_key,

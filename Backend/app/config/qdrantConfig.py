@@ -1,4 +1,4 @@
-from qdrant_client import QdrantClient
+from qdrant_client import AsyncQdrantClient as QdrantClient
 from app.config.server import config
 
 qdrant_client = QdrantClient(

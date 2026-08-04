@@ -9,7 +9,7 @@ router = APIRouter()
 
 @router.get("/", response_model=ThreadListResponse)
 async def list_threads(session_id: str = Depends(get_session_id)):
-    return ThreadListResponse(threads=list_threads_for_session(session_id))
+    return ThreadListResponse(threads=await list_threads_for_session(session_id))
 
 
 @router.get("/{thread_id}/messages", response_model=ThreadMessagesResponse)
@@ -18,5 +18,5 @@ async def thread_messages(
     request: Request,
     session_id: str = Depends(get_session_id),
 ):
-    messages = get_thread_messages(thread_id, session_id, request.app.state.graph)
+    messages = await get_thread_messages(thread_id, session_id, request.app.state.graph)
     return ThreadMessagesResponse(thread_id=thread_id, messages=messages)
