@@ -1,6 +1,6 @@
 from app.schemas.state import GraphState
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from app.service.LLMProviders import generate_completion
+from app.service.LLMProviders import stream_completion
 from app.config.models import GENERATION_MODEL, GENERATION_PROVIDER
 from app.agent.graph.keys import extract_keys
 from langchain_core.runnables import RunnableConfig
@@ -34,21 +34,24 @@ async def llm_node(state: GraphState, config: RunnableConfig):
     openai_messages = [_to_openai_message(message) for message in messages]
 
     openai_api_key, groq_api_key = extract_keys(config)
+    queue = (config or {}).get("configurable", {}).get("token_queue") if isinstance(config, dict) else None
+    full_text = ""
 
-    response = await generate_completion(
+    async for delta in stream_completion(
         provider=GENERATION_PROVIDER,
         model=GENERATION_MODEL,
         openai_api_key=openai_api_key,
         groq_api_key=groq_api_key,
         messages=openai_messages,
-    )
-
-    assistant_text = response
+    ):
+        full_text += delta
+        if queue:
+            await queue.put(("token", delta))
 
     if state.intent == "rag":
-        assistant_text = FALLBACK_DISCLAIMER + assistant_text
+        full_text = FALLBACK_DISCLAIMER + full_text
 
     return {
-        "messages": [HumanMessage(content=state.query), AIMessage(content=assistant_text)],
-        "response": assistant_text,
+        "messages": [HumanMessage(content=state.query), AIMessage(content=full_text)],
+        "response": full_text,
     }

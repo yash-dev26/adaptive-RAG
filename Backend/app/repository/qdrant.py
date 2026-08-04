@@ -6,12 +6,14 @@ from qdrant_client.models import (
     SparseVectorParams,
     Modifier,
 )
+import asyncio
+
 from app.config.qdrantConfig import qdrant_client
 from app.config.server import config
-from asyncio import sleep
 
-def _ensure_payload_index(collection_name: str, field_name: str, field_schema):
-    return qdrant_client.create_payload_index(
+
+async def _ensure_payload_index(collection_name: str, field_name: str, field_schema):
+    return await qdrant_client.create_payload_index(
         collection_name=collection_name,
         field_name=field_name,
         field_schema=field_schema,
@@ -76,17 +78,24 @@ async def store_in_qdrant(
         batch = points[i : i + CHUNK_SIZE]
         for attempt in range(1, MAX_RETRIES + 1):
             try:
-                await qdrant_client.upsert(collection_name=collection_name, points=batch, timeout=TIMEOUT_SEC)
+                await qdrant_client.upsert(
+                    collection_name=collection_name,
+                    points=batch,
+                    timeout=TIMEOUT_SEC,
+                )
                 break
             except Exception as e:
                 if attempt < MAX_RETRIES:
                     wait = 2 ** attempt
-                    print(f"[qdrant] upsert batch {i}:{i+len(batch)} failed (attempt {attempt}), retrying in {wait}s: {e}")
-                    await sleep(wait)
+                    print(
+                        f"[qdrant] upsert batch {i}:{i+len(batch)} failed (attempt {attempt}), retrying in {wait}s: {e}"
+                    )
+                    await asyncio.sleep(wait)
                     continue
-                else:
-                    print(f"[qdrant] upsert batch {i}:{i+len(batch)} failed (attempt {attempt}), giving up: {e}")
-                    raise
+                print(
+                    f"[qdrant] upsert batch {i}:{i+len(batch)} failed (attempt {attempt}), giving up: {e}"
+                )
+                raise
 
     return {
         "status": "success",

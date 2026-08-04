@@ -11,6 +11,7 @@ import asyncio
 
 from app.repository.qdrant import ensure_collections
 from app.repository.chatSessions import ensure_indexes as ensure_chat_session_indexes
+from app.ingestion.sparse_embeddings import _get_sparse_model
 from app.config.server import config
 from slowapi.errors import RateLimitExceeded
 from fastapi.responses import JSONResponse
@@ -30,8 +31,18 @@ async def lifespan(app: FastAPI):
     with connect_to_mongodb() as checkpointer:
         print("Successfully connected to MongoDB.")
         app.state.graph = build_graph(checkpointer=checkpointer)
-        ensure_collections()
+        await ensure_collections()
         await ensure_chat_session_indexes()
+
+        # Warm the sparse BM25 model up front so the first file upload does
+        # not block inside the request while Hugging Face downloads it.
+        try:
+            print("[startup] Warming sparse embedding model...")
+            await asyncio.to_thread(_get_sparse_model)
+            print("[startup] Sparse embedding model ready.")
+        except Exception as exc:
+            print(f"[startup] Sparse embedding warmup skipped: {exc}")
+
         cleanup_task = asyncio.create_task(cleanup_semantic_cache())
 
         yield

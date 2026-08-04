@@ -25,13 +25,16 @@ async def ingest_data(request, openai_api_key: str):
         }
 
     try:
+        print(f"[ingest] Parsing uploaded file: {request.file_path}")
         text = load_file(request.file_path)
     except Exception:
         raise HTTPException(status_code=400, detail="Uploaded file could not be parsed")
 
+    print(f"[ingest] Chunking parsed content for file_id={request.file_id}")
     chunks = split_text(text)
     print(f"Split text into chunks: {len(chunks)} chunks")
 
+    print(f"[ingest] Embedding and storing {len(chunks)} chunks for file_id={request.file_id}")
     result = await gen_embeddingsAndStoreInQdrant(
         chunks,
         request.file_id,

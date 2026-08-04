@@ -2,7 +2,8 @@ from fastapi import APIRouter, Request, Depends
 from fastapi.responses import StreamingResponse
 
 from app.schemas.request import ChatRequest
-from app.service.chatService import process_chat, stream_chat_events
+from app.service.chatService import process_chat
+from app.service.chatStream import stream_chat_events
 
 from app.auth.session import get_session_id, get_api_keys
 from app.config.rate_limiter import limiter

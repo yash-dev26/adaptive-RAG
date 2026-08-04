@@ -6,6 +6,7 @@ import json
 
 from fastapi import HTTPException
 import os
+import asyncio
 
 from app.config.redis import redis_client
 from app.repository.qdrant import store_in_qdrant
@@ -73,13 +74,13 @@ async def gen_embeddingsAndStoreInQdrant(
 
         print(f"[embeddings] Dense embedding batch {batch_start}:{batch_end} (size={len(batch)})")
         try:
-            dense_embeddings = await _embed_batch(batch_texts, openai_api_key)
+            dense_embeddings, sparse_embeddings = await asyncio.gather(
+                _embed_batch(batch_texts, openai_api_key),
+                asyncio.to_thread(gen_sparse_document_embeddings, batch_texts),
+            )
         except Exception as e:
             print(f"[embeddings] Dense embedding batch failed at {batch_start}:{batch_end} -> {type(e).__name__}: {e}")
             raise
-
-        print(f"[embeddings] Sparse (BM25) embedding batch {batch_start}:{batch_end}")
-        sparse_embeddings = gen_sparse_document_embeddings(batch_texts)
 
         all_dense_embeddings.extend(dense_embeddings)
         all_sparse_embeddings.extend(sparse_embeddings)

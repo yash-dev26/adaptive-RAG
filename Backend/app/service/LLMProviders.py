@@ -64,3 +64,51 @@ async def generate_completion(
             return response.choices[0].message.content
 
     raise ValueError(f"Unsupported provider: {provider}")
+
+async def stream_completion(provider, messages, openai_api_key, groq_api_key=None, model=None, temperature=0):
+    if not openai_api_key:
+        raise ValueError("openai_api_key is required (used as the fallback provider too)")
+
+    if provider == "groq" and not groq_api_key:
+        provider = "openai"
+        model = None
+
+    if provider == "openai":
+        client = get_openai_client(openai_api_key)
+        try:
+            stream = await client.chat.completions.create(
+                model=model or OPENAI_DEFAULT_MODEL,
+                messages=messages,
+                temperature=temperature,
+                stream=True,
+            )
+        except AuthenticationError:
+            raise HTTPException(status_code=401, detail="Invalid OpenAI API key")
+    elif provider == "groq":
+        try:
+            client = get_groq_client(groq_api_key)
+            stream = await client.chat.completions.create(
+                model=model or GROQ_FAST_MODEL,
+                messages=messages,
+                temperature=temperature,
+                stream=True,
+            )
+        except Exception as e:
+            print(f"[groq fallback] {e}")
+            client = get_openai_client(openai_api_key)
+            try:
+                stream = await client.chat.completions.create(
+                    model=OPENAI_DEFAULT_MODEL,
+                    messages=messages,
+                    temperature=temperature,
+                    stream=True,
+                )
+            except AuthenticationError:
+                raise HTTPException(status_code=401, detail="Invalid OpenAI API key")
+    else:
+        raise ValueError(f"Unsupported provider: {provider}")
+
+    async for chunk in stream:
+        delta = chunk.choices[0].delta.content
+        if delta:
+            yield delta
