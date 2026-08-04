@@ -3,7 +3,7 @@ from app.retrieval.retrieval import retrieve_relevant_documents
 from app.retrieval.fusion import reciprocal_rank_fusion
 from app.agent.graph.keys import extract_keys
 from langchain_core.runnables import RunnableConfig
-
+import asyncio
 
 async def retrieve_node(state: GraphState, config: RunnableConfig) -> dict:
     print("[flow] entering retrieve_node")
@@ -13,8 +13,8 @@ async def retrieve_node(state: GraphState, config: RunnableConfig) -> dict:
 
     openai_api_key, _ = extract_keys(config)
 
-    all_rankings = [
-        await retrieve_relevant_documents(
+    tasks = [
+        retrieve_relevant_documents(
             q,
             top_k=5,
             file_id=state.file_id,
@@ -23,6 +23,8 @@ async def retrieve_node(state: GraphState, config: RunnableConfig) -> dict:
         )
         for q in queries
     ]
+
+    all_rankings = await asyncio.gather(*tasks)
 
     if not all_rankings:
         fused_docs = []
