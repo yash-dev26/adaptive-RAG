@@ -18,6 +18,14 @@ class GraphState(BaseModel):
     intent: Optional[Literal["rag", "llm"]] = None
     rewrite_type: Optional[Literal["none", "single", "multi"]] = None
 
+    # `intent` answers "should we retrieve
+    # at all", `task_type` answers "what retrieval STRATEGY does this task need
+    # once we're retrieving". 
+    #   qa        -> existing top-k retrieve -> evaluate -> rewrite-or-generate loop
+    #   summarize -> dedicated map-reduce node, bypasses the evaluator entirely
+    #   aggregate -> wider multi-query retrieval, evaluator skips score-gap rewrite logic
+    task_type: Optional[Literal["qa", "summarize", "aggregate"]] = None
+
     # Post-retrieval evaluation
     eval_action: Optional[
         Literal["generate", "rewrite_single", "rewrite_multi", "llm_fallback"]

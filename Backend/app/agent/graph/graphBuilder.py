@@ -10,6 +10,7 @@ from app.agent.graph.nodes.singleRewrite import single_query_rewrite_node
 from app.agent.graph.nodes.trim_docs import trim_docs_node
 from app.agent.graph.nodes.reranking import reranking_node
 from app.agent.graph.nodes.llm import llm_node
+from app.agent.graph.nodes.summarize import summarize_node
 
 from app.agent.graph.routing.pre_planner_routes import route_after_pre_planner
 from app.agent.graph.routing.post_planner_router import route_after_evaluator
@@ -29,6 +30,7 @@ def build_graph(checkpointer=None):
     graph.add_node("rerank", reranking_node)
     graph.add_node("generate", generate_node)
     graph.add_node("llm", llm_node)
+    graph.add_node("summarize", summarize_node)
 
     # Entry point
     graph.set_entry_point("pre_planner")
@@ -41,6 +43,7 @@ def build_graph(checkpointer=None):
             "multi_rewrite": "multi_rewrite",
             "single_rewrite": "single_rewrite",
             "retrieve": "retrieve",
+            "summarize": "summarize",
             "llm": "llm",
         },
     )
@@ -76,5 +79,6 @@ def build_graph(checkpointer=None):
 
     graph.add_edge("generate", END)
     graph.add_edge("llm", END)
+    graph.add_edge("summarize", END)
 
     return graph.compile(checkpointer=checkpointer)

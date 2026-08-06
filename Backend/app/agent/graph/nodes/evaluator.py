@@ -22,8 +22,21 @@ async def post_retrieval_evaluator_node(state: GraphState, config: RunnableConfi
 
     print(
         f"[evaluator] top={top_score:.3f} second={second_score:.3f} "
-        f"gap={score_gap:.3f} attempts={attempts}"
+        f"gap={score_gap:.3f} attempts={attempts} task_type={state.task_type}"
     )
+
+    # Aggregate queries ("list every X", "compare A and B") are deliberately
+    # broad, a low top-1 similarity score is *expected* (no single chunk will be
+    # "the" answer) and doesn't indicate bad retrieval the way it does for a
+    # single-fact QA query. The score-gap/rewrite logic below was designed to
+    # answer "is there one good answer here", which is the wrong question for
+    # this task_type. Just check we got something back and generate.
+    if state.task_type == "aggregate":
+        if docs:
+            print(f"[evaluator] aggregate task, {len(docs)} docs retrieved → generate")
+            return {"eval_action": "generate", "confidence": top_score}
+        print("[evaluator] aggregate task, no docs → llm_fallback")
+        return {"eval_action": "llm_fallback", "confidence": top_score}
 
     # Once retries are exhausted, route_after_evaluator forces "llm" no matter what action this node returns, so past this point we never rewrite again and never call
     # the evaluator LLM (that call would be wasted money, and its own
