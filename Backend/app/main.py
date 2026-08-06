@@ -31,22 +31,25 @@ async def lifespan(app: FastAPI):
     with connect_to_mongodb() as checkpointer:
         print("Successfully connected to MongoDB.")
         app.state.graph = build_graph(checkpointer=checkpointer)
-        await ensure_collections()
-        await ensure_chat_session_indexes()
 
-        # Warm the sparse BM25 model up front so the first file upload does
-        # not block inside the request while Hugging Face downloads it.
-        try:
-            print("[startup] Warming sparse embedding model...")
-            await asyncio.to_thread(_get_sparse_model)
-            print("[startup] Sparse embedding model ready.")
-        except Exception as exc:
-            print(f"[startup] Sparse embedding warmup skipped: {exc}")
+        async def initialize_startup_resources():
+            try:
+                await ensure_collections()
+                await ensure_chat_session_indexes()
+
+                print("[startup] Warming sparse embedding model in background...")
+                await asyncio.to_thread(_get_sparse_model)
+                print("[startup] Sparse embedding model ready.")
+            except Exception as exc:
+                print(f"[startup] background initialization skipped: {exc}")
+
+        startup_task = asyncio.create_task(initialize_startup_resources())
 
         cleanup_task = asyncio.create_task(cleanup_semantic_cache())
 
         yield
 
+        startup_task.cancel()
         cleanup_task.cancel()
 
 app = FastAPI(lifespan=lifespan)

@@ -18,7 +18,10 @@ from app.utils.retry import external_api_retry
 
 EMBEDDING_MODEL = "text-embedding-3-small"
 EMBEDDING_DIMENSION = 384
-BATCH_SIZE = 512
+# Smaller batches to reduce per-request latency and improve parallelism
+BATCH_SIZE = int(os.getenv("EMBED_BATCH_SIZE", "64"))
+# Concurrency limit for processing multiple batches simultaneously
+CONCURRENCY_LIMIT = int(os.getenv("EMBED_CONCURRENCY", "4"))
 EMBED_TIMEOUT_SEC = float(os.getenv("OPENAI_EMBED_TIMEOUT_SEC", "45"))
 
 @external_api_retry()
@@ -63,57 +66,64 @@ async def gen_embeddingsAndStoreInQdrant(
     openai_api_key: str,
 ) -> dict:
 
-    all_dense_embeddings: List[List[float]] = []
-    all_sparse_embeddings = []
-    print(f"[embeddings] Generating hybrid embeddings for {len(chunks)} chunks...")
+    print(f"[embeddings] Generating hybrid embeddings for {len(chunks)} chunks (batch_size={BATCH_SIZE}, concurrency={CONCURRENCY_LIMIT})...")
 
-    for batch_start in range(0, len(chunks), BATCH_SIZE):
-        batch = chunks[batch_start : batch_start + BATCH_SIZE]
-        batch_texts = [chunk["text"] for chunk in batch]
-        batch_end = batch_start + len(batch)
+    semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
 
-        print(f"[embeddings] Dense embedding batch {batch_start}:{batch_end} (size={len(batch)})")
+    async def _process_batch(batch_start: int, batch_chunks: List[dict]):
+        batch_texts = [chunk["text"] for chunk in batch_chunks]
+        batch_end = batch_start + len(batch_chunks)
+        print(f"[embeddings] Processing batch {batch_start}:{batch_end} (size={len(batch_chunks)})")
+
         try:
             dense_embeddings, sparse_embeddings = await asyncio.gather(
                 _embed_batch(batch_texts, openai_api_key),
                 asyncio.to_thread(gen_sparse_document_embeddings, batch_texts),
             )
         except Exception as e:
-            print(f"[embeddings] Dense embedding batch failed at {batch_start}:{batch_end} -> {type(e).__name__}: {e}")
+            print(f"[embeddings] Batch failed at {batch_start}:{batch_end} -> {type(e).__name__}: {e}")
             raise
 
-        all_dense_embeddings.extend(dense_embeddings)
-        all_sparse_embeddings.extend(sparse_embeddings)
+        points = []
+        for offset, (chunk_data, dense_vec, sparse_vec) in enumerate(
+            zip(batch_chunks, dense_embeddings, sparse_embeddings)
+        ):
+            idx = batch_start + offset
+            points.append(
+                {
+                    "id": str(uuid4()),
+                    "vector": {"dense": dense_vec, "sparse": sparse_vec},
+                    "payload": {
+                        "chunk": chunk_data["text"],
+                        "text": chunk_data["text"],
+                        "page": chunk_data["page"],
+                        "file_id": file_id,
+                        "user_id": user_id,
+                        "chunk_index": idx,
+                        "content_hash": content_hash,
+                    },
+                }
+            )
 
-    points = [
-        {
-            "id": str(uuid4()),
-            "vector": {
-                "dense": dense_vec,
-                "sparse": sparse_vec,
-            },
-            "payload": {
-                "chunk": chunk_data["text"],
-                "text": chunk_data["text"],
-                "page": chunk_data["page"],
-                "file_id": file_id,
-                "user_id": user_id,
-                "chunk_index": idx,
-                "content_hash": content_hash,
-            },
-        }
-        for idx, (chunk_data, dense_vec, sparse_vec) in enumerate(
-            zip(chunks, all_dense_embeddings, all_sparse_embeddings)
-        )
-    ]
+        # Store this batch's points in Qdrant
+        await store_in_qdrant(config["qdrant_collection_name"], points, file_id, user_id)
 
-    print(
-        f"[embeddings] Generated {len(points)} hybrid embeddings for "
-        f"file_id={file_id}, user_id={user_id} "
-        f"in {len(range(0, len(chunks), BATCH_SIZE))} batch(es)."
-    )
+    # Create tasks for all batches and run up to CONCURRENCY_LIMIT concurrently
+    tasks = []
+    for batch_start in range(0, len(chunks), BATCH_SIZE):
+        batch_chunks = chunks[batch_start : batch_start + BATCH_SIZE]
 
-    print(f"[embeddings] Storing embeddings in Qdrant for file_id={file_id}, user_id={user_id}...")
-    return await store_in_qdrant(
-        config["qdrant_collection_name"], points, file_id, user_id
-    )
+        async def sem_task(bs=batch_start, bc=batch_chunks):
+            async with semaphore:
+                await _process_batch(bs, bc)
+
+        tasks.append(asyncio.create_task(sem_task()))
+
+    # Await completion of all batches
+    await asyncio.gather(*tasks)
+
+    return {
+        "status": "success",
+        "message": f"Stored {len(chunks)} chunks in collection '{config['qdrant_collection_name']}'.",
+        "file_id": file_id,
+    }

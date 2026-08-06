@@ -1,12 +1,19 @@
 from uuid import uuid4
 from pathlib import Path
 import hashlib
+import asyncio
+import os
 from app.schemas.request import IngestRequest
-from app.service.ingestService import ingest_data
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi import Depends
 from app.auth.session import get_session_id, get_api_keys
 from app.config.rate_limiter import limiter
+
+# Background in-process ingest: parse/chunk upload and run the embedding
+# pipeline asynchronously so the route returns quickly while batches
+# are processed concurrently by the embedding pipeline.
+from app.ingestion.chunking import load_file, split_text
+from app.ingestion.embeddings import gen_embeddingsAndStoreInQdrant
 
 router = APIRouter()
 
@@ -60,18 +67,40 @@ async def ingest(
 
     try:
         print(f"[ingest] Received file upload: session_id={session_id}, file_id={file_id}, filename={file.filename}, content_hash={content_hash}")
-        ingest_result = await ingest_data(
-            IngestRequest(
-                user_id=session_id,
-                file_id=file_id,
-                file_path=str(stored_path),
-                content_hash=content_hash,
-            ),
-            openai_api_key=api_keys["openai_api_key"],
+
+        # Parse and chunk the file immediately, then schedule background processing
+        parsed = load_file(str(stored_path))
+        chunks = split_text(parsed)
+        print(f"[ingest] Parsed and split into {len(chunks)} chunks for file_id={file_id}")
+
+        async def _background_process(path: Path, chunks_list, f_id, user_id, c_hash, openai_key):
+            try:
+                await gen_embeddingsAndStoreInQdrant(chunks_list, f_id, user_id, c_hash, openai_key)
+                print(f"[ingest][background] Completed ingestion for file_id={f_id}")
+            except Exception as e:
+                print(f"[ingest][background] Ingestion failed for file_id={f_id}: {e}")
+            finally:
+                try:
+                    if path.exists():
+                        path.unlink()
+                        print(f"[ingest][background] Removed temp file {path}")
+                except Exception as ex:
+                    print(f"[ingest][background] Failed to remove temp file {path}: {ex}")
+
+        # Schedule background processing (won't survive process restart)
+        asyncio.create_task(
+            _background_process(stored_path, chunks, file_id, session_id, content_hash, api_keys["openai_api_key"])
         )
+
+        ingest_result = {
+            "status": "queued",
+            "file_id": file_id,
+            "message": "Ingestion started in background; results will be available when complete.",
+            "duplicate": False,
+        }
     finally:
-        if stored_path.exists():
-            stored_path.unlink()
+        # The background task will remove the uploaded file when done.
+        pass
 
     return {
         "file_id": ingest_result.get("file_id", file_id),
