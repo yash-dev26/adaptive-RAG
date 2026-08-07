@@ -1,9 +1,8 @@
 from app.schemas.state import GraphState
 from app.retrieval.retrieval import fetch_all_chunks_for_file
-from app.service.LLMProviders import generate_completion, stream_completion
+from app.service.LLMProviders import generate_completion
 from app.agent.graph.keys import extract_keys
 from app.config.models import REWRITE_PROVIDER, REWRITE_MODEL, GENERATION_PROVIDER, GENERATION_MODEL
-from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 import asyncio
 
@@ -54,29 +53,21 @@ async def summarize_node(state: GraphState, config: RunnableConfig) -> dict:
     print("[flow] entering summarize_node")
 
     openai_api_key, groq_api_key = extract_keys(config)
-    queue = (config or {}).get("configurable", {}).get("token_queue") if isinstance(config, dict) else None
 
     chunks = await fetch_all_chunks_for_file(state.file_id, state.user_id)
 
     if not chunks:
-        full_text = (
-            "I couldn't find any ingested content for this document to summarize."
-        )
-        if queue:
-            await queue.put(("token", full_text))
+        summary_text = "I couldn't find any ingested content for this document to summarize."
         return {
-            "messages": [HumanMessage(content=state.query), AIMessage(content=full_text)],
-            "response": full_text,
+            "summary_text": summary_text,
         }
 
     batches = _batch_chunks(chunks, MAP_BATCH_CHAR_BUDGET)
     print(f"[summarize] {len(chunks)} chunks -> {len(batches)} map batch(es)")
 
     if len(batches) == 1:
-        # Small enough to summarize directly, single pass. Stream it so the
-        # SSE UX matches generate_node/llm_node instead of arriving all at once.
-        full_text = ""
-        async for delta in stream_completion(
+        # Small enough to summarize directly, single pass.
+        summary_text = await generate_completion(
             provider=GENERATION_PROVIDER,
             model=GENERATION_MODEL,
             openai_api_key=openai_api_key,
@@ -85,14 +76,10 @@ async def summarize_node(state: GraphState, config: RunnableConfig) -> dict:
                 {"role": "system", "content": SINGLE_PASS_SYSTEM_PROMPT},
                 {"role": "user", "content": batches[0]},
             ],
-        ):
-            full_text += delta
-            if queue:
-                await queue.put(("token", delta))
+        )
 
         return {
-            "messages": [HumanMessage(content=state.query), AIMessage(content=full_text)],
-            "response": full_text,
+            "summary_text": summary_text,
         }
 
     # Map: summarize each batch in parallel on the cheap/fast provider —
@@ -118,11 +105,9 @@ async def summarize_node(state: GraphState, config: RunnableConfig) -> dict:
         f"[Section {i + 1}]\n{s}" for i, s in enumerate(batch_summaries)
     )
 
-    # Reduce: combine section summaries into the final answer. This is the
-    # user-facing generation, so it goes on OPENAI/GENERATION_MODEL and
-    # streams to the token queue like every other terminal node.
-    full_text = ""
-    async for delta in stream_completion(
+    # Reduce: combine section summaries into a single summary artifact that
+    # generate_node will turn into the final user-facing answer.
+    summary_text = await generate_completion(
         provider=GENERATION_PROVIDER,
         model=GENERATION_MODEL,
         openai_api_key=openai_api_key,
@@ -131,12 +116,8 @@ async def summarize_node(state: GraphState, config: RunnableConfig) -> dict:
             {"role": "system", "content": REDUCE_SYSTEM_PROMPT},
             {"role": "user", "content": reduce_input},
         ],
-    ):
-        full_text += delta
-        if queue:
-            await queue.put(("token", delta))
+    )
 
     return {
-        "messages": [HumanMessage(content=state.query), AIMessage(content=full_text)],
-        "response": full_text,
+        "summary_text": summary_text,
     }

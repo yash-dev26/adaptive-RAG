@@ -18,7 +18,8 @@ export default function RequireApiKey({ children }) {
           <p className="text-lg font-semibold">API key required</p>
           <p className="text-sm text-zinc-500">
             This is a bring-your-own-key app — add an OpenAI API key to unlock the chat.
-            Your key stays in this browser and is never stored on our server.
+            Groq and Tavily are optional. Your keys stay in this browser and are never stored on
+            our server.
           </p>
           <Button variant="accent" size="md" className="font-mono" onClick={openModal}>
             Add API key

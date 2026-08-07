@@ -38,9 +38,8 @@ async def post_retrieval_evaluator_node(state: GraphState, config: RunnableConfi
         print("[evaluator] aggregate task, no docs → llm_fallback")
         return {"eval_action": "llm_fallback", "confidence": top_score}
 
-    # Once retries are exhausted, route_after_evaluator forces "llm" no matter what action this node returns, so past this point we never rewrite again and never call
-    # the evaluator LLM (that call would be wasted money, and its own
-    # suggestion would get silently overridden anyway, which produced misleading trace logs before this fix).
+    # Once retries are exhausted, the router will stop the rewrite loop and
+    # hand control to the fallback path instead of paying for another rewrite.
     if attempts >= MAX_REWRITE_ATTEMPTS:
         if docs and top_score >= LOW_CONFIDENCE_THRESHOLD:
             print(f"[evaluator] Retries exhausted, usable docs ({top_score:.3f}) → generate")

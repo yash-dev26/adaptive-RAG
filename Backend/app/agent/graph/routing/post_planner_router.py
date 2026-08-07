@@ -15,11 +15,11 @@ def route_after_evaluator(state: GraphState) -> str:
         return "rewrite_multi"
 
     if action == "llm_fallback":
-        return "llm"
+        return "web_search" if attempts >= MAX_REWRITE_ATTEMPTS else "llm"
 
-    # Rewrite attempts exhausted — fall back to LLM rather than looping
+    # Rewrite attempts exhausted — use web search before falling back to LLM.
     if attempts >= MAX_REWRITE_ATTEMPTS and action in {"rewrite_single", "rewrite_multi"}:
-        return "llm"
+        return "web_search"
 
     # action == "generate" (or anything else): decide whether we can generate directly,
     # trim the context to the top 4, or pay for reranking.

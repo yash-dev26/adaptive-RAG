@@ -7,6 +7,7 @@ config = {
     "qdrant_api_key": os.getenv("QDRANT_API_KEY"),
     "qdrant_collection_name": os.getenv("QDRANT_COLLECTION_NAME"),
     "openai_api_key": os.getenv("OPENAI_API_KEY"),
+    "tavily_api_key": os.getenv("TAVILY_API_KEY"),
     "mongodb_uri": os.getenv("MONGODB_URI"),
     "semantic_cache_collection_name": os.getenv("SEMANTIC_CACHE_COLLECTION_NAME"),
     "CORS_ORIGINS": os.getenv("CORS_ORIGINS", "http://localhost:5174,http://localhost:5173,http://localhost:3000"),

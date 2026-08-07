@@ -12,12 +12,32 @@ def _to_openai_message(message) -> dict:
         "content": getattr(message, "content", ""),
     }
 
+
+def _summarize_prompt(query: str, summary_text: str) -> list:
+    return [
+        SystemMessage(
+            content=(
+                "You are a helpful assistant that turns a condensed document summary into the final user-facing answer. "
+                "Keep the response accurate, concise, and clearly written."
+            )
+        ),
+        HumanMessage(
+            content=(
+                f"User request:\n{query}\n\n"
+                f"Condensed document summary:\n{summary_text}"
+            )
+        ),
+    ]
+
 async def generate_node(state: GraphState, config: RunnableConfig):
     print("[flow] entering generate_node")
     query = state.query
     context = state.context
+    summary_text = getattr(state, "summary_text", None)
 
-    if context:
+    if state.task_type == "summarize" and summary_text:
+        messages = _summarize_prompt(query, summary_text)
+    elif context:
         context_text = "\n\n".join(
             f"[Doc {i + 1}] {doc['text']}" for i, doc in enumerate(context)
         )

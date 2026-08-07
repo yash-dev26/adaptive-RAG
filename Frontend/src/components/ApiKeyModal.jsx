@@ -3,19 +3,21 @@ import { Button, Input, Card, CardHeader, CardContent, CardFooter, Badge } from 
 import { useApiKeys } from "../context/ApiKeysContext.jsx";
 
 export default function ApiKeyModal() {
-  const { isModalOpen, closeModal, openaiKey, groqKey, saveKeys, clearKeys } = useApiKeys();
+  const { isModalOpen, closeModal, openaiKey, groqKey, tavilyKey, saveKeys, clearKeys } = useApiKeys();
 
   const [openaiInput, setOpenaiInput] = useState(openaiKey);
   const [groqInput, setGroqInput] = useState(groqKey);
+  const [tavilyInput, setTavilyInput] = useState(tavilyKey);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (isModalOpen) {
       setOpenaiInput(openaiKey);
       setGroqInput(groqKey);
+      setTavilyInput(tavilyKey);
       setError("");
     }
-  }, [isModalOpen, openaiKey, groqKey]);
+  }, [isModalOpen, openaiKey, groqKey, tavilyKey]);
 
   if (!isModalOpen) return null;
 
@@ -24,7 +26,11 @@ export default function ApiKeyModal() {
       setError("An OpenAI API key is required — it powers embeddings and answer generation.");
       return;
     }
-    saveKeys({ openaiKey: openaiInput.trim(), groqKey: groqInput.trim() });
+    saveKeys({
+      openaiKey: openaiInput.trim(),
+      groqKey: groqInput.trim(),
+      tavilyKey: tavilyInput.trim(),
+    });
     closeModal();
   }
 
@@ -32,11 +38,12 @@ export default function ApiKeyModal() {
     clearKeys();
     setOpenaiInput("");
     setGroqInput("");
+    setTavilyInput("");
     setError("");
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4">
+    <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4">
       <Card className="w-full max-w-md">
         <CardHeader className="border-b border-zinc-800">
           <h2 className="text-lg font-semibold text-zinc-100">Bring your own API keys</h2>
@@ -78,6 +85,23 @@ export default function ApiKeyModal() {
             </p>
           </div>
 
+          <div>
+            <label className="flex items-center gap-2 text-xs font-mono uppercase tracking-wide text-zinc-400 mb-2">
+              Tavily API Key <Badge>optional</Badge>
+            </label>
+            <Input
+              type="password"
+              placeholder="tvly-... (optional)"
+              value={tavilyInput}
+              onChange={(e) => setTavilyInput(e.target.value)}
+              autoComplete="off"
+            />
+            <p className="text-xs text-zinc-600 mt-1">
+              Enables web search fallback when the document cannot answer the question. Otherwise,
+              the app falls back directly to the LLM.
+            </p>
+          </div>
+
           {error && <p className="text-sm text-red-400">{error}</p>}
         </CardContent>
 
@@ -86,7 +110,7 @@ export default function ApiKeyModal() {
             variant="ghost"
             size="md"
             onClick={handleForget}
-            disabled={!openaiKey && !groqKey}
+            disabled={!openaiKey && !groqKey && !tavilyKey}
             className="text-red-400 hover:text-red-300"
           >
             Forget keys

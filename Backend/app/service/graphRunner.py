@@ -7,6 +7,7 @@ and SSE formatting.
 
 from uuid import uuid4
 from app.schemas.request import ChatRequest
+from app.config.server import config as server_config
 
 
 def resolve_thread_id(request: ChatRequest, session_id: str) -> str:
@@ -31,5 +32,6 @@ def build_run_config(thread_id: str, api_keys: dict) -> dict:
             "thread_id": thread_id,
             "openai_api_key": api_keys["openai_api_key"],
             "groq_api_key": api_keys.get("groq_api_key"),
+            "tavily_api_key": api_keys.get("tavily_api_key") or server_config.get("tavily_api_key"),
         }
     }

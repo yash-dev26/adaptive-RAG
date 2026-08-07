@@ -24,6 +24,7 @@ export function ApiKeysProvider({ children }) {
     () => ({
       openaiKey: keys.openaiKey,
       groqKey: keys.groqKey,
+      tavilyKey: keys.tavilyKey,
       hasOpenAiKey: Boolean(keys.openaiKey),
       isModalOpen,
       openModal,

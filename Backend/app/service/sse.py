@@ -14,6 +14,8 @@ STREAMABLE_NODES = {
     "evaluator",
     "trim_docs",
     "rerank",
+    "web_search",
+    "summarize",
     "generate",
     "llm",
 }
@@ -26,6 +28,8 @@ NODE_DETAILS = {
     "evaluator": "Evaluating retrieved context quality.",
     "trim_docs": "Trimming context to fit the prompt window.",
     "rerank": "Reranking retrieved documents.",
+    "web_search": "Searching the web for a fallback answer.",
+    "summarize": "Summarizing the document before final generation.",
     "generate": "Generating the final answer from context.",
     "llm": "Generating the final answer without retrieval.",
 }

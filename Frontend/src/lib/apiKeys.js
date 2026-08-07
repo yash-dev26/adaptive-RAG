@@ -1,19 +1,21 @@
 const OPENAI_KEY_STORAGE = "adaptive_rag_openai_key";
 const GROQ_KEY_STORAGE = "adaptive_rag_groq_key";
+const TAVILY_KEY_STORAGE = "adaptive_rag_tavily_key";
 
 // Keys live only in this browser's localStorage. They're attached as request
-// headers (X-OpenAI-Key / X-Groq-Key) on each call and never sent anywhere
-// else. Clearing them (or your browser storage) forgets them for good —
-// there's no server-side copy.
+// headers (X-OpenAI-Key / X-Groq-Key / X-Tavily-Key) on each call and never
+// sent anywhere else. Clearing them (or your browser storage) forgets them
+// for good — there's no server-side copy.
 
 export function getApiKeys() {
   return {
     openaiKey: localStorage.getItem(OPENAI_KEY_STORAGE) || "",
     groqKey: localStorage.getItem(GROQ_KEY_STORAGE) || "",
+    tavilyKey: localStorage.getItem(TAVILY_KEY_STORAGE) || "",
   };
 }
 
-export function setApiKeys({ openaiKey, groqKey }) {
+export function setApiKeys({ openaiKey, groqKey, tavilyKey }) {
   if (openaiKey && openaiKey.trim()) {
     localStorage.setItem(OPENAI_KEY_STORAGE, openaiKey.trim());
   } else {
@@ -25,11 +27,18 @@ export function setApiKeys({ openaiKey, groqKey }) {
   } else {
     localStorage.removeItem(GROQ_KEY_STORAGE);
   }
+
+  if (tavilyKey && tavilyKey.trim()) {
+    localStorage.setItem(TAVILY_KEY_STORAGE, tavilyKey.trim());
+  } else {
+    localStorage.removeItem(TAVILY_KEY_STORAGE);
+  }
 }
 
 export function clearApiKeys() {
   localStorage.removeItem(OPENAI_KEY_STORAGE);
   localStorage.removeItem(GROQ_KEY_STORAGE);
+  localStorage.removeItem(TAVILY_KEY_STORAGE);
 }
 
 export function hasRequiredKeys() {

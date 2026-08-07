@@ -39,6 +39,7 @@ class GraphState(BaseModel):
     # Conversation / LLM
     messages: Annotated[List, add_messages] = Field(default_factory=list)
     response: Optional[str] = None
+    summary_text: Optional[str] = None
 
     # Control Flags
     confidence: Optional[float] = None

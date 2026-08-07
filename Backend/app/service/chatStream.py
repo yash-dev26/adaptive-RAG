@@ -235,7 +235,7 @@ async def stream_chat_events(request: ChatRequest, graph, session_id: str, api_k
             sources = [
                 {
                     "text": item.get("text") if isinstance(item, dict) else item,
-                    "score": item.get("qdrant_score") if isinstance(item, dict) else 0,
+                    "score": item.get("qdrant_score", item.get("score", 0)) if isinstance(item, dict) else 0,
                     "payload": item if isinstance(item, dict) else {},
                 }
                 for item in context

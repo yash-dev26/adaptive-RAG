@@ -23,3 +23,8 @@ def extract_keys(config: Optional[RunnableConfig]) -> Tuple[str, Optional[str]]:
         )
 
     return openai_api_key, groq_api_key
+
+
+def extract_tavily_key(config: Optional[RunnableConfig]) -> Optional[str]:
+    configurable = (config or {}).get("configurable", {}) if isinstance(config, dict) else {}
+    return configurable.get("tavily_api_key")

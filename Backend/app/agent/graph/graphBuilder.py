@@ -11,6 +11,7 @@ from app.agent.graph.nodes.trim_docs import trim_docs_node
 from app.agent.graph.nodes.reranking import reranking_node
 from app.agent.graph.nodes.llm import llm_node
 from app.agent.graph.nodes.summarize import summarize_node
+from app.agent.graph.nodes.webSearch import web_search_node
 
 from app.agent.graph.routing.pre_planner_routes import route_after_pre_planner
 from app.agent.graph.routing.post_planner_router import route_after_evaluator
@@ -31,6 +32,7 @@ def build_graph(checkpointer=None):
     graph.add_node("generate", generate_node)
     graph.add_node("llm", llm_node)
     graph.add_node("summarize", summarize_node)
+    graph.add_node("web_search", web_search_node)
 
     # Entry point
     graph.set_entry_point("pre_planner")
@@ -45,6 +47,7 @@ def build_graph(checkpointer=None):
             "retrieve": "retrieve",
             "summarize": "summarize",
             "llm": "llm",
+            "web_search": "web_search",
         },
     )
 
@@ -70,15 +73,17 @@ def build_graph(checkpointer=None):
             "rewrite_single":  "single_rewrite",
             "rewrite_multi":   "multi_rewrite",
             "llm":             "llm",
+            "web_search":      "web_search",
             "generate":        "generate",
         },
     )
 
     graph.add_edge("trim_docs", "generate")
     graph.add_edge("rerank", "generate")
+    graph.add_edge("web_search", "generate")
+    graph.add_edge("summarize", "generate")
 
     graph.add_edge("generate", END)
     graph.add_edge("llm", END)
-    graph.add_edge("summarize", END)
 
     return graph.compile(checkpointer=checkpointer)
