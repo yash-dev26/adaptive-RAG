@@ -20,7 +20,6 @@ def get_session_id(
 def get_api_keys(
     x_openai_key: str | None = Header(default=None, alias="X-OpenAI-Key"),
     x_groq_key: str | None = Header(default=None, alias="X-Groq-Key"),
-    x_tavily_key: str | None = Header(default=None, alias="X-Tavily-Key"),
 ) -> dict:
     """
     BYOK credentials, read fresh on every request.
@@ -28,6 +27,11 @@ def get_api_keys(
     Keys live only for the duration of this request (passed as function
     args / LangGraph `configurable`, never written to state, cache, logs,
     or Mongo checkpoints).
+
+    Tavily is NOT BYOK: it's a server-side-only key (see app/config/server.py
+    and app/service/graphRunner.py), since Tavily's free tier (1000
+    credits/month) comfortably covers the web-search fallback path without
+    asking every user for their own key.
     """
     if not x_openai_key or not x_openai_key.strip():
         raise HTTPException(
@@ -38,5 +42,4 @@ def get_api_keys(
     return {
         "openai_api_key": x_openai_key.strip(),
         "groq_api_key": x_groq_key.strip() if x_groq_key and x_groq_key.strip() else None,
-        "tavily_api_key": x_tavily_key.strip() if x_tavily_key and x_tavily_key.strip() else None,
     }

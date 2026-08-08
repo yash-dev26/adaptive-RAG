@@ -3,21 +3,19 @@ import { Button, Input, Card, CardHeader, CardContent, CardFooter, Badge } from 
 import { useApiKeys } from "../context/ApiKeysContext.jsx";
 
 export default function ApiKeyModal() {
-  const { isModalOpen, closeModal, openaiKey, groqKey, tavilyKey, saveKeys, clearKeys } = useApiKeys();
+  const { isModalOpen, closeModal, openaiKey, groqKey, saveKeys, clearKeys } = useApiKeys();
 
   const [openaiInput, setOpenaiInput] = useState(openaiKey);
   const [groqInput, setGroqInput] = useState(groqKey);
-  const [tavilyInput, setTavilyInput] = useState(tavilyKey);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (isModalOpen) {
       setOpenaiInput(openaiKey);
       setGroqInput(groqKey);
-      setTavilyInput(tavilyKey);
       setError("");
     }
-  }, [isModalOpen, openaiKey, groqKey, tavilyKey]);
+  }, [isModalOpen, openaiKey, groqKey]);
 
   if (!isModalOpen) return null;
 
@@ -29,7 +27,6 @@ export default function ApiKeyModal() {
     saveKeys({
       openaiKey: openaiInput.trim(),
       groqKey: groqInput.trim(),
-      tavilyKey: tavilyInput.trim(),
     });
     closeModal();
   }
@@ -38,7 +35,6 @@ export default function ApiKeyModal() {
     clearKeys();
     setOpenaiInput("");
     setGroqInput("");
-    setTavilyInput("");
     setError("");
   }
 
@@ -85,23 +81,6 @@ export default function ApiKeyModal() {
             </p>
           </div>
 
-          <div>
-            <label className="flex items-center gap-2 text-xs font-mono uppercase tracking-wide text-zinc-400 mb-2">
-              Tavily API Key <Badge>optional</Badge>
-            </label>
-            <Input
-              type="password"
-              placeholder="tvly-... (optional)"
-              value={tavilyInput}
-              onChange={(e) => setTavilyInput(e.target.value)}
-              autoComplete="off"
-            />
-            <p className="text-xs text-zinc-600 mt-1">
-              Enables web search fallback when the document cannot answer the question. Otherwise,
-              the app falls back directly to the LLM.
-            </p>
-          </div>
-
           {error && <p className="text-sm text-red-400">{error}</p>}
         </CardContent>
 
@@ -110,7 +89,7 @@ export default function ApiKeyModal() {
             variant="ghost"
             size="md"
             onClick={handleForget}
-            disabled={!openaiKey && !groqKey && !tavilyKey}
+            disabled={!openaiKey && !groqKey}
             className="text-red-400 hover:text-red-300"
           >
             Forget keys

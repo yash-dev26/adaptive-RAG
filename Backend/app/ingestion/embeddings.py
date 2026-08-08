@@ -94,7 +94,6 @@ async def gen_embeddingsAndStoreInQdrant(
                     "id": str(uuid4()),
                     "vector": {"dense": dense_vec, "sparse": sparse_vec},
                     "payload": {
-                        "chunk": chunk_data["text"],
                         "text": chunk_data["text"],
                         "page": chunk_data["page"],
                         "file_id": file_id,

@@ -3,30 +3,12 @@ from app.schemas.state import GraphState
 from app.service.LLMProviders import generate_completion
 from app.config.models import REWRITE_MODEL, REWRITE_PROVIDER
 from app.agent.graph.keys import extract_keys
+from app.agent.prompts.multiRewrite import SYSTEM_PROMPT
 from langchain_core.runnables import RunnableConfig
 
 async def multi_query_rewrite_node(state: GraphState, config: RunnableConfig) -> dict:
     print("[flow] entering multi_query_rewrite_node")
     query = state.query
-
-    SYSTEM_PROMPT = """
-You are a search query optimizer for vector database searches. Your task is to reformulate user queries into more effective search terms.
-
-Generate 3 alternative queries that improve document retrieval.
-
-Guidelines:
-- Keep queries semantically similar to the original
-- Make them more specific and clear
-- Focus on improving search relevance
-- Do NOT answer the query
-- Include both specific and general related terms
-- Maintain all important meaning from original query
-
-Return ONLY valid JSON in this exact shape:
-{
-  "queries": ["query 1", "query 2", "query 3"]
-}
-"""
 
     openai_api_key, groq_api_key = extract_keys(config)
 

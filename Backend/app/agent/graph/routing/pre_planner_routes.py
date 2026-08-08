@@ -10,10 +10,12 @@ from app.schemas.state import GraphState
 
 
 def route_after_pre_planner(state: GraphState) -> str:
-    if state.intent == "llm" and state.tavily_configured == True:
-        return "web_search"
-    
-    if state.intent == "llm" and state.tavily_configured == False:
+    if state.intent == "llm":
+        # Only a genuine general-knowledge query (time-sensitive or not) is
+        # eligible for the Tavily fallback -- chitchat (task_type=None here)
+        # never reaches web_search, tavily_configured or not.
+        if state.task_type == "general_knowledge" and state.tavily_configured:
+            return "web_search"
         return "llm"
 
     # summarize needs the whole document, not a top-k similarity search

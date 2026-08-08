@@ -2,6 +2,7 @@ from app.service.LLMProviders import generate_completion
 from app.schemas.state import GraphState
 from app.config.models import REWRITE_MODEL, REWRITE_PROVIDER
 from app.agent.graph.keys import extract_keys
+from app.agent.prompts.singleRewrite import build_single_rewrite_prompt
 from langchain_core.runnables import RunnableConfig
 
 async def single_query_rewrite_node(state: GraphState, config: RunnableConfig):
@@ -19,20 +20,7 @@ async def single_query_rewrite_node(state: GraphState, config: RunnableConfig):
 
     history_block = "\n".join(history_lines) if history_lines else "No prior conversation."
 
-    SYSTEM_PROMPT = f"""You are a search query optimizer for vector database searches. Your task is to reformulate user queries into more effective search terms. You will be given a conversation history followed by the user's latest query. 
-    Conversation History:
-    {history_block}
-    Provide only the optimized search query without any explanations, greetings, or additional commentary.
-
-    Example input: "how to fix a bike tire that's gone flat"
-    Example output: "bicycle tire repair puncture fix patch inflate maintenance flat tire inner tube replacement"
-    
-    Constraints:
-    - Output only the enhanced search terms
-    - Keep focus on searchable concepts
-    - Include both specific and general related terms
-    - Maintain all important meaning from original query
-    - Add relevant synonyms and related terms"""
+    SYSTEM_PROMPT = build_single_rewrite_prompt(history_block)
 
     openai_api_key, groq_api_key = extract_keys(config)
 

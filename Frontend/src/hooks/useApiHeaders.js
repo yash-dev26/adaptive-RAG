@@ -3,7 +3,7 @@ import { getSessionId } from "../lib/session.js";
 import { useApiKeys } from "../context/ApiKeysContext.jsx";
 
 export function useApiHeaders() {
-  const { openaiKey, groqKey, tavilyKey } = useApiKeys();
+  const { openaiKey, groqKey } = useApiKeys();
 
   const buildHeaders = useCallback(
     (extra = {}) => {
@@ -13,10 +13,9 @@ export function useApiHeaders() {
         ...extra,
       };
       if (groqKey) headers["X-Groq-Key"] = groqKey;
-      if (tavilyKey) headers["X-Tavily-Key"] = tavilyKey;
       return headers;
     },
-    [openaiKey, groqKey, tavilyKey]
+    [openaiKey, groqKey]
   );
 
   return { buildHeaders };

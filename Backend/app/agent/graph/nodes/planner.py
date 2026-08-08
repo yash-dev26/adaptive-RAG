@@ -6,6 +6,7 @@ from app.schemas.state import GraphState
 from langchain_core.runnables import RunnableConfig
 from app.service.LLMProviders import generate_completion
 from app.config.models import PLANNER_PROVIDER, PLANNER_MODEL
+from app.agent.prompts.planner import CLASSIFY_PROMPT as _CLASSIFY_PROMPT
 
 _CHITCHAT_PHRASES = {
     "hi", "hii", "hiii", "hello", "hey", "heya", "yo",
@@ -32,61 +33,6 @@ _AGGREGATE_PATTERN = re.compile(
     r"advantages and disadvantages|pros and cons)\b",
     re.IGNORECASE,
 )
-
-_CLASSIFY_PROMPT = """\
-You are a routing classifier for a Retrieval-Augmented Generation (RAG) system.
-Your task is to determine (1) whether the user's query should be answered using
-the uploaded document or using general knowledge, and if using the document,
-(2) what kind of retrieval task it is.
-
-Return ONLY valid JSON:
-
-{"intent":"needs_retrieval","task_type":"qa"}
-{"intent":"needs_retrieval","task_type":"summarize"}
-{"intent":"needs_retrieval","task_type":"aggregate"}
-{"intent":"general_knowledge","task_type":null}
-
-Decision Rules
-
-Choose "general_knowledge" ONLY if the query is clearly independent of the
-uploaded document and is better answered directly from general knowledge.
-
-Examples:
-- What is 2 + 2?
-- Capital of France?
-- Who is the current President of the United States?
-- What time is it in Tokyo?
-- Translate "hello" to Spanish.
-- Today's weather in Delhi.
-- Current Bitcoin price.
-
-For ALL other informational queries, use "needs_retrieval" and pick a task_type:
-
-- "summarize": the user wants a synthesis/overview of the whole document, or a
-  large section of it, not an answer grounded in a handful of specific
-  passages. Examples: "summarize this", "what's the tl;dr", "give me an
-  overview", "what are the key takeaways".
-
-- "aggregate": the user wants an exhaustive or comparative sweep across the
-  document — every instance of something, or a structured comparison of
-  multiple concepts/entities. Examples: "list every API mentioned",
-  "compare Docker and Kubernetes", "what are the pros and cons", "summarize
-  advantages and disadvantages of each approach".
-
-- "qa": everything else that's about the document — a specific fact,
-  definition, explanation, or a question referring to "this", "the
-  document", "it", or previous context, where a handful of relevant
-  passages is enough to answer.
-
-NOTE: When in doubt between "qa" and one of the others, choose "qa" as it's
-the safer default since it still retrieves and can partially answer broader
-questions, whereas the reverse that is mis-classifying a narrow question as
-"summarize" wastes a full-document pass.
-
-Do NOT answer the question.
-Do NOT explain your reasoning.
-Output ONLY valid JSON.
-"""
 
 
 def _is_chitchat(query: str) -> bool:
@@ -161,12 +107,26 @@ async def pre_retrieval_planner_node(state: GraphState, config: RunnableConfig) 
     # router whether the web-search fallback branch is even reachable.
     tavily_configured = extract_tavily_key(config) is not None
 
-    if not state.file_id:
-        return {"intent": "llm", "rewrite_type": "none", "task_type": None, "tavily_configured": tavily_configured}
-
+    # Chitchat is checked first, before the file_id check: chitchat should
+    # never reach Tavily regardless of whether a document is attached, and
+    # checking file_id first would let a "hi" sent with no file uploaded
+    # fall into the general_knowledge branch below by default.
     if _is_chitchat(query):
         print("[planner] heuristic match: chitchat, skipping retrieval")
         return {"intent": "llm", "rewrite_type": "none", "task_type": None, "tavily_configured": tavily_configured}
+
+    if not state.file_id:
+        # No document to retrieve from at all, and we already know it isn't
+        # chitchat -- there's no other bucket for this, it's a general-
+        # knowledge question by elimination. task_type="general_knowledge"
+        # is what makes this (and only this) eligible for the Tavily
+        # fallback in route_after_pre_planner, time-sensitive or not.
+        return {
+            "intent": "llm",
+            "rewrite_type": "none",
+            "task_type": "general_knowledge",
+            "tavily_configured": tavily_configured,
+        }
 
     heuristic_task_type = _heuristic_task_type(query)
     if heuristic_task_type == "summarize":
@@ -193,7 +153,16 @@ async def pre_retrieval_planner_node(state: GraphState, config: RunnableConfig) 
     print(f"[planner] classified intent: {intent}, task_type: {task_type}")
 
     if intent in {"general_knowledge", "chitchat"}:
-        return {"intent": "llm", "rewrite_type": "none", "task_type": None, "tavily_configured": tavily_configured}
+        # A genuinely classified general-knowledge query is Tavily-eligible;
+        # a defensive "chitchat" from the classifier (not expected per the
+        # prompt's own output options, but the code tolerates it) is not.
+        resolved_task_type = "general_knowledge" if intent == "general_knowledge" else None
+        return {
+            "intent": "llm",
+            "rewrite_type": "none",
+            "task_type": resolved_task_type,
+            "tavily_configured": tavily_configured,
+        }
 
     # LLM classifier agreed the query is retrieval-worthy; give aggregate
     # queries the same multi-rewrite fan-out the heuristic path uses.

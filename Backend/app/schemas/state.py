@@ -21,10 +21,13 @@ class GraphState(BaseModel):
     # `intent` answers "should we retrieve
     # at all", `task_type` answers "what retrieval STRATEGY does this task need
     # once we're retrieving". 
-    #   qa        -> existing top-k retrieve -> evaluate -> rewrite-or-generate loop
-    #   summarize -> dedicated map-reduce node, bypasses the evaluator entirely
-    #   aggregate -> wider multi-query retrieval, evaluator skips score-gap rewrite logic
-    task_type: Optional[Literal["qa", "summarize", "aggregate"]] = None
+    #   qa                -> existing top-k retrieve -> evaluate -> rewrite-or-generate loop
+    #   summarize         -> dedicated map-reduce node, bypasses the evaluator entirely
+    #   aggregate         -> wider multi-query retrieval, evaluator skips score-gap rewrite logic
+    #   general_knowledge -> intent="llm" with a real informational query behind it (time-
+    #                        sensitive or not) as opposed to chitchat; the only task_type
+    #                        that's allowed to reach the Tavily web-search fallback.
+    task_type: Optional[Literal["qa", "summarize", "aggregate", "general_knowledge"]] = None
 
     # Post-retrieval evaluation
     eval_action: Optional[

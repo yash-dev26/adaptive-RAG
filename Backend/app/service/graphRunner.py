@@ -26,12 +26,15 @@ def build_run_config(thread_id: str, api_keys: dict) -> dict:
     what MongoDBSaver checkpoints on every turn (that's how conversation
     memory works), and we don't want a user's API key written to Mongo.
     `configurable` is per-invocation only; nodes read it via extract_keys().
+
+    Tavily is server-side only (not BYOK, see app/auth/session.py) — always
+    sourced from server_config, never from the request.
     """
     return {
         "configurable": {
             "thread_id": thread_id,
             "openai_api_key": api_keys["openai_api_key"],
             "groq_api_key": api_keys.get("groq_api_key"),
-            "tavily_api_key": api_keys.get("tavily_api_key") or server_config.get("tavily_api_key"),
+            "tavily_api_key": server_config.get("tavily_api_key"),
         }
     }

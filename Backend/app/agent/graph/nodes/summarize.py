@@ -10,43 +10,17 @@ from app.retrieval.retrieval import fetch_all_chunks_for_file
 from app.service.LLMProviders import generate_completion
 from app.agent.graph.keys import extract_keys
 from app.config.models import REWRITE_PROVIDER, REWRITE_MODEL
+from app.agent.prompts.summarize import (
+    MAP_SYSTEM_PROMPT,
+    REDUCE_SYSTEM_PROMPT,
+    SINGLE_PASS_SYSTEM_PROMPT,
+)
 from langchain_core.runnables import RunnableConfig
 import asyncio
 
 # Rough chars-per-batch budget for the map step. Not a real tokenizer count
 # just a conservative multiplier (~4 chars/token) 
 MAP_BATCH_CHAR_BUDGET = 12_000
-
-MAP_SYSTEM_PROMPT = """You are summarizing one section of a larger document.
-Write a dense, factual summary of ONLY the section below 
-RULES:
-1. do not editorialize,
-2. do not say "this section discusses", 
-3. just state the content directly.
-4. Preserve specific names, numbers, and terms verbatim;they may be needed to
-answer follow-up questions later. 
-5. Keep it proportionate to the input length don't over-compress."""
-
-REDUCE_SYSTEM_PROMPT = """You are given a sequence of section summaries from a
-single document, in original document order. Combine them into one coherent,
-well-organized condensation of the WHOLE document. Merge redundant points
-across sections, preserve the overall structure/flow, and keep specific
-facts, names, and numbers intact.
-
-This is an intermediate artifact, not the final answer shown to the user —
-a later step will turn it into the user-facing response, so favor
-completeness and density over polished prose.
-
-NOTE: Do not mention that you were given section summaries,
-write as if summarizing the document directly."""
-
-SINGLE_PASS_SYSTEM_PROMPT = """Condense the following document. Be
-comprehensive but concise, preserve specific facts/names/numbers, and organize
-the summary to reflect the document's own structure.
-
-This is an intermediate artifact, not the final answer shown to the user —
-a later step will turn it into the user-facing response, so favor
-completeness and density over polished prose."""
 
 
 def _batch_chunks(chunks: list[dict], char_budget: int) -> list[str]:
