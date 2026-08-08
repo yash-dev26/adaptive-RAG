@@ -20,27 +20,49 @@ router = APIRouter()
 MAX_UPLOAD_SIZE_BYTES = 20 * 1024 * 1024  # 20 MB
 UPLOAD_READ_CHUNK_SIZE = 1024 * 1024  # 1 MB per read
 
+# asyncio.create_task() only holds a *weak* reference to the task it
+# returns — if nothing else references it, it's eligible for garbage
+# collection mid-execution and can silently disappear before finishing.
+# Keeping a strong reference here (and dropping it via add_done_callback
+# once the task finishes) is the fix recommended by the asyncio docs.
 _background_tasks: set[asyncio.Task] = set()
 
 
-async def _read_with_size_cap(file: UploadFile, max_bytes: int) -> bytes:
-  
-    chunks = []
+async def _stream_to_disk(file: UploadFile, dest_path: Path, max_bytes: int) -> str:
+    """
+    Reads the upload in 1MB chunks and writes each straight to dest_path
+    as it arrives, instead of buffering the whole file in memory first.
+    The content hash is computed incrementally over the same chunks, so
+    there's never a second full-size copy of the file sitting in RAM.
+
+    If the size cap is exceeded partway through, the partial file on disk
+    is removed before raising, so no truncated file is left behind.
+    """
+    hasher = hashlib.sha256()
     total = 0
 
-    while True:
-        chunk = await file.read(UPLOAD_READ_CHUNK_SIZE)
-        if not chunk:
-            break
-        total += len(chunk)
-        if total > max_bytes:
-            raise HTTPException(
-                status_code=413,
-                detail=f"File exceeds the {max_bytes // (1024 * 1024)}MB upload limit",
-            )
-        chunks.append(chunk)
+    try:
+        with open(dest_path, "wb") as out:
+            while True:
+                chunk = await file.read(UPLOAD_READ_CHUNK_SIZE)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > max_bytes:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"File exceeds the {max_bytes // (1024 * 1024)}MB upload limit",
+                    )
+                hasher.update(chunk)
+                out.write(chunk)
+    except HTTPException:
+        dest_path.unlink(missing_ok=True)
+        raise
+    except Exception:
+        dest_path.unlink(missing_ok=True)
+        raise
 
-    return b"".join(chunks)
+    return hasher.hexdigest()
 
 
 @router.post("/")
@@ -63,9 +85,7 @@ async def ingest(
     upload_dir.mkdir(parents=True, exist_ok=True)
     stored_path = upload_dir / f"{file_id}{suffix}"
 
-    content = await _read_with_size_cap(file, MAX_UPLOAD_SIZE_BYTES)
-    content_hash = hashlib.sha256(content).hexdigest()
-    stored_path.write_bytes(content)
+    content_hash = await _stream_to_disk(file, stored_path, MAX_UPLOAD_SIZE_BYTES)
 
     print(f"[ingest] Received file upload: session_id={session_id}, file_id={file_id}, filename={file.filename}, content_hash={content_hash}")
 

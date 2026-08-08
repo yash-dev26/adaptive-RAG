@@ -37,9 +37,6 @@ async def lifespan(app: FastAPI):
                 await ensure_collections()
                 await ensure_chat_session_indexes()
 
-                print("[startup] Warming sparse embedding model in background...")
-                await asyncio.to_thread(_get_sparse_model)
-                print("[startup] Sparse embedding model ready.")
             except Exception as exc:
                 print(f"[startup] background initialization skipped: {exc}")
 

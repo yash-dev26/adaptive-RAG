@@ -18,10 +18,11 @@ from app.utils.retry import external_api_retry
 
 EMBEDDING_MODEL = "text-embedding-3-small"
 EMBEDDING_DIMENSION = 384
-# Smaller batches to reduce per-request latency and improve parallelism
-BATCH_SIZE = int(os.getenv("EMBED_BATCH_SIZE", "64"))
-# Concurrency limit for processing multiple batches simultaneously
-CONCURRENCY_LIMIT = int(os.getenv("EMBED_CONCURRENCY", "4"))
+# Smaller batches to reduce peak memory usage on Render
+BATCH_SIZE = int(os.getenv("EMBED_BATCH_SIZE", "32"))
+
+# process one batch at a time to keep peak memory usage low on Render
+CONCURRENCY_LIMIT = int(os.getenv("EMBED_CONCURRENCY", "1"))
 EMBED_TIMEOUT_SEC = float(os.getenv("OPENAI_EMBED_TIMEOUT_SEC", "45"))
 
 @external_api_retry()
