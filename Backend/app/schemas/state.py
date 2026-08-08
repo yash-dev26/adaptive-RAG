@@ -44,5 +44,7 @@ class GraphState(BaseModel):
     # Control Flags
     confidence: Optional[float] = None
 
+    tavily_configured: Optional[bool] = None
+
     # Track rewrite attempts to avoid infinite loops
     rewrite_attempts: int = 0

@@ -11,6 +11,10 @@ async def reranking_node(state: GraphState):
     if not docs:
         return state
 
+    reranked = await rerank(query, docs, top_k=4)
+
     return {
-        "context": await rerank(query, docs, top_k=4)
+        "context": reranked,
+        "scores": [doc.get("score", 0.0) for doc in reranked],
+        "rrf_scores": [doc.get("rrf_score", 0.0) for doc in reranked],
     }

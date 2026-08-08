@@ -1,7 +1,7 @@
 import json
 import re
 
-from app.agent.graph.keys import extract_keys
+from app.agent.graph.keys import extract_keys, extract_tavily_key
 from app.schemas.state import GraphState
 from langchain_core.runnables import RunnableConfig
 from app.service.LLMProviders import generate_completion
@@ -155,26 +155,32 @@ async def pre_retrieval_planner_node(state: GraphState, config: RunnableConfig) 
     print("[flow] entering pre_retrieval_planner_node")
     query = state.query.strip()
 
+    # Computed once per turn and stamped onto every return below. This is the
+    # only place in the graph that reads the Tavily key (via config, never
+    # persisted), so it's also the only place that can tell the evaluator's
+    # router whether the web-search fallback branch is even reachable.
+    tavily_configured = extract_tavily_key(config) is not None
+
     if not state.file_id:
-        return {"intent": "llm", "rewrite_type": "none", "task_type": None}
+        return {"intent": "llm", "rewrite_type": "none", "task_type": None, "tavily_configured": tavily_configured}
 
     if _is_chitchat(query):
         print("[planner] heuristic match: chitchat, skipping retrieval")
-        return {"intent": "llm", "rewrite_type": "none", "task_type": None}
+        return {"intent": "llm", "rewrite_type": "none", "task_type": None, "tavily_configured": tavily_configured}
 
     heuristic_task_type = _heuristic_task_type(query)
     if heuristic_task_type == "summarize":
         print("[planner] heuristic match: summarize")
-        return {"intent": "rag", "rewrite_type": "none", "task_type": "summarize"}
+        return {"intent": "rag", "rewrite_type": "none", "task_type": "summarize", "tavily_configured": tavily_configured}
 
     if heuristic_task_type == "aggregate":
         print("[planner] heuristic match: aggregate")
         # Aggregate queries route through the existing multi-rewrite fan-out
         # for broader coverage
-        return {"intent": "rag", "rewrite_type": "multi", "task_type": "aggregate"}
+        return {"intent": "rag", "rewrite_type": "multi", "task_type": "aggregate", "tavily_configured": tavily_configured}
 
     if _is_ambiguous(query.lower()):
-        return {"intent": "rag", "rewrite_type": "single", "task_type": "qa"}
+        return {"intent": "rag", "rewrite_type": "single", "task_type": "qa", "tavily_configured": tavily_configured}
 
     openai_api_key, groq_api_key = extract_keys(config)
 
@@ -187,7 +193,7 @@ async def pre_retrieval_planner_node(state: GraphState, config: RunnableConfig) 
     print(f"[planner] classified intent: {intent}, task_type: {task_type}")
 
     if intent in {"general_knowledge", "chitchat"}:
-        return {"intent": "llm", "rewrite_type": "none", "task_type": None}
+        return {"intent": "llm", "rewrite_type": "none", "task_type": None, "tavily_configured": tavily_configured}
 
     # LLM classifier agreed the query is retrieval-worthy; give aggregate
     # queries the same multi-rewrite fan-out the heuristic path uses.
@@ -195,4 +201,5 @@ async def pre_retrieval_planner_node(state: GraphState, config: RunnableConfig) 
         "intent": "rag",
         "rewrite_type": "multi" if task_type == "aggregate" else "none",
         "task_type": task_type or "qa",
+        "tavily_configured": tavily_configured,
     }

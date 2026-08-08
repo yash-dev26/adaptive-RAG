@@ -1,8 +1,15 @@
+"""Map-reduce document condensation for the "summarize" task type.
+
+This node's only job is compiling a whole (potentially large) document down
+to something small enough to hand to the centralized `generate` node as
+`summary_text`.
+"""
+
 from app.schemas.state import GraphState
 from app.retrieval.retrieval import fetch_all_chunks_for_file
 from app.service.LLMProviders import generate_completion
 from app.agent.graph.keys import extract_keys
-from app.config.models import REWRITE_PROVIDER, REWRITE_MODEL, GENERATION_PROVIDER, GENERATION_MODEL
+from app.config.models import REWRITE_PROVIDER, REWRITE_MODEL
 from langchain_core.runnables import RunnableConfig
 import asyncio
 
@@ -22,16 +29,24 @@ answer follow-up questions later.
 
 REDUCE_SYSTEM_PROMPT = """You are given a sequence of section summaries from a
 single document, in original document order. Combine them into one coherent,
-well-organized summary of the WHOLE document. Merge redundant points across
-sections, preserve the overall structure/flow, and keep specific facts, names,
-and numbers intact. 
+well-organized condensation of the WHOLE document. Merge redundant points
+across sections, preserve the overall structure/flow, and keep specific
+facts, names, and numbers intact.
+
+This is an intermediate artifact, not the final answer shown to the user —
+a later step will turn it into the user-facing response, so favor
+completeness and density over polished prose.
 
 NOTE: Do not mention that you were given section summaries,
 write as if summarizing the document directly."""
 
-SINGLE_PASS_SYSTEM_PROMPT = """Summarize the following document. Be
+SINGLE_PASS_SYSTEM_PROMPT = """Condense the following document. Be
 comprehensive but concise, preserve specific facts/names/numbers, and organize
-the summary to reflect the document's own structure."""
+the summary to reflect the document's own structure.
+
+This is an intermediate artifact, not the final answer shown to the user —
+a later step will turn it into the user-facing response, so favor
+completeness and density over polished prose."""
 
 
 def _batch_chunks(chunks: list[dict], char_budget: int) -> list[str]:
@@ -57,35 +72,37 @@ async def summarize_node(state: GraphState, config: RunnableConfig) -> dict:
     chunks = await fetch_all_chunks_for_file(state.file_id, state.user_id)
 
     if not chunks:
-        summary_text = "I couldn't find any ingested content for this document to summarize."
+        # No LLM call needed for this one — `generate_node` still turns it
+        # into the streamed final response, same as every other summary,
+        # so the user always gets one consistent code path/UX regardless of
+        # why the summary is short.
         return {
-            "summary_text": summary_text,
+            "summary_text": "I couldn't find any ingested content for this document to summarize.",
         }
 
     batches = _batch_chunks(chunks, MAP_BATCH_CHAR_BUDGET)
     print(f"[summarize] {len(chunks)} chunks -> {len(batches)} map batch(es)")
 
     if len(batches) == 1:
-        # Small enough to summarize directly, single pass.
+        # Small enough to condense directly, single pass.
         summary_text = await generate_completion(
-            provider=GENERATION_PROVIDER,
-            model=GENERATION_MODEL,
+            provider=REWRITE_PROVIDER,
+            model=REWRITE_MODEL,
             openai_api_key=openai_api_key,
             groq_api_key=groq_api_key,
             messages=[
                 {"role": "system", "content": SINGLE_PASS_SYSTEM_PROMPT},
                 {"role": "user", "content": batches[0]},
             ],
+            temperature=0,
         )
 
         return {
             "summary_text": summary_text,
         }
 
-    # Map: summarize each batch in parallel on the cheap/fast provider —
-    # these are intermediate artifacts, not user-facing, so this is the
-    # right place to spend Groq instead of OpenAI (same cost-awareness
-    # principle the rewrite/planner nodes already use).
+    # Map: condense each batch in parallel on the cheap/fast provider —
+    # these are intermediate artifacts, not user-facing.
     async def _summarize_batch(batch_text: str) -> str:
         return await generate_completion(
             provider=REWRITE_PROVIDER,
@@ -105,17 +122,18 @@ async def summarize_node(state: GraphState, config: RunnableConfig) -> dict:
         f"[Section {i + 1}]\n{s}" for i, s in enumerate(batch_summaries)
     )
 
-    # Reduce: combine section summaries into a single summary artifact that
-    # generate_node will turn into the final user-facing answer.
+    # Reduce: combine section condensations into a single artifact that
+    # generate_node will turn into the final, streamed, user-facing answer.
     summary_text = await generate_completion(
-        provider=GENERATION_PROVIDER,
-        model=GENERATION_MODEL,
+        provider=REWRITE_PROVIDER,
+        model=REWRITE_MODEL,
         openai_api_key=openai_api_key,
         groq_api_key=groq_api_key,
         messages=[
             {"role": "system", "content": REDUCE_SYSTEM_PROMPT},
             {"role": "user", "content": reduce_input},
         ],
+        temperature=0,
     )
 
     return {

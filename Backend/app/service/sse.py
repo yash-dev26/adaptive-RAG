@@ -17,7 +17,6 @@ STREAMABLE_NODES = {
     "web_search",
     "summarize",
     "generate",
-    "llm",
 }
 
 NODE_DETAILS = {
@@ -30,8 +29,7 @@ NODE_DETAILS = {
     "rerank": "Reranking retrieved documents.",
     "web_search": "Searching the web for a fallback answer.",
     "summarize": "Summarizing the document before final generation.",
-    "generate": "Generating the final answer from context.",
-    "llm": "Generating the final answer without retrieval.",
+    "generate": "Generating the final answer.",
 }
 
 

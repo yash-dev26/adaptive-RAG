@@ -4,17 +4,16 @@ from app.schemas.state import GraphState
 from app.agent.graph.nodes.planner import pre_retrieval_planner_node
 from app.agent.graph.nodes.evaluator import post_retrieval_evaluator_node
 from app.agent.graph.nodes.retriever import retrieve_node
-from app.agent.graph.nodes.rag_llm import generate_node
+from app.agent.graph.nodes.generate import generate_node
 from app.agent.graph.nodes.multiRewrite import multi_query_rewrite_node
 from app.agent.graph.nodes.singleRewrite import single_query_rewrite_node
 from app.agent.graph.nodes.trim_docs import trim_docs_node
 from app.agent.graph.nodes.reranking import reranking_node
-from app.agent.graph.nodes.llm import llm_node
 from app.agent.graph.nodes.summarize import summarize_node
 from app.agent.graph.nodes.webSearch import web_search_node
 
 from app.agent.graph.routing.pre_planner_routes import route_after_pre_planner
-from app.agent.graph.routing.post_planner_router import route_after_evaluator
+from app.agent.graph.routing.post_evaluator_router import route_after_evaluator
 from app.agent.graph.routing.postRewrite_router import route_after_single_rewrite
 
 
@@ -30,7 +29,6 @@ def build_graph(checkpointer=None):
     graph.add_node("trim_docs", trim_docs_node)
     graph.add_node("rerank", reranking_node)
     graph.add_node("generate", generate_node)
-    graph.add_node("llm", llm_node)
     graph.add_node("summarize", summarize_node)
     graph.add_node("web_search", web_search_node)
 
@@ -46,7 +44,10 @@ def build_graph(checkpointer=None):
             "single_rewrite": "single_rewrite",
             "retrieve": "retrieve",
             "summarize": "summarize",
-            "llm": "llm",
+            # "llm" is a route *name* meaning "answer without retrieval"
+            # it's handled by the same centralized generate node as every
+            # other terminal path
+            "llm": "generate",
             "web_search": "web_search",
         },
     )
@@ -58,7 +59,7 @@ def build_graph(checkpointer=None):
         route_after_single_rewrite,
         {
             "retrieve": "retrieve",
-            "llm": "llm",
+            "llm": "generate",
         },
     )
 
@@ -72,7 +73,7 @@ def build_graph(checkpointer=None):
             "trim_docs":       "trim_docs",
             "rewrite_single":  "single_rewrite",
             "rewrite_multi":   "multi_rewrite",
-            "llm":             "llm",
+            "llm":             "generate",
             "web_search":      "web_search",
             "generate":        "generate",
         },
@@ -84,6 +85,5 @@ def build_graph(checkpointer=None):
     graph.add_edge("summarize", "generate")
 
     graph.add_edge("generate", END)
-    graph.add_edge("llm", END)
 
     return graph.compile(checkpointer=checkpointer)
