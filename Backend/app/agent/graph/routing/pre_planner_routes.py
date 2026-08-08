@@ -10,7 +10,10 @@ from app.schemas.state import GraphState
 
 
 def route_after_pre_planner(state: GraphState) -> str:
-    if state.intent == "llm":
+    if state.intent == "llm" and state.tavily_configured == True:
+        return "web_search"
+    
+    if state.intent == "llm" and state.tavily_configured == False:
         return "llm"
 
     # summarize needs the whole document, not a top-k similarity search
