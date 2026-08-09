@@ -1,8 +1,35 @@
 .env
+.env.*
+!.env.example
+
+# Python
 __pycache__/
 *.pyc
-*.pyd
-*.db
-*.sqlite3
-.DS_Store
+*.pyo
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 .venv/
+venv/
+
+# Local runtime artifacts
+uploaded_files/
+*.log
+
+# Editor / OS noise
+.vscode/
+.idea/
+.DS_Store
+
+# Evaluation/ 
+
+evaluation/results/*
+
+# Exception: results/latest/ is a manually curated snapshot
+!evaluation/results/latest/
+!evaluation/results/.gitkeep
+
+# seed_fixtures.py output — machine/environment-specific file_ids,
+# regenerate locally instead of committing
+evaluation/fixtures/file_ids.json

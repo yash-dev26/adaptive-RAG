@@ -1,0 +1,50 @@
+[
+  {
+    "id": "pto_new_hire",
+    "query": "How many PTO days does a new hire who joins in September get in their first year?",
+    "file_ref": "acme_handbook",
+    "ground_truth": "New hires who join after July 1st receive a prorated 11 days of PTO for their first year."
+  },
+  {
+    "id": "pto_rollover",
+    "query": "Do unused PTO days roll over into the next year?",
+    "file_ref": "acme_handbook",
+    "ground_truth": "No. PTO does not roll over between years; unused days above 5 are forfeited on December 31st."
+  },
+  {
+    "id": "remote_full_time_approval",
+    "query": "What approval is needed to work fully remote, five days a week?",
+    "file_ref": "acme_handbook",
+    "ground_truth": "Fully remote arrangements require written sign-off from both the employee's manager and HR, and are reviewed every 6 months."
+  },
+  {
+    "id": "expense_threshold",
+    "query": "At what expense amount do I need manager approval before submitting?",
+    "file_ref": "acme_handbook",
+    "ground_truth": "Expenses of $75 or more require a manager's approval before submission."
+  },
+  {
+    "id": "notice_period_staff_plus",
+    "query": "How much notice does a Staff+ engineering leader need to give when resigning?",
+    "file_ref": "acme_handbook",
+    "ground_truth": "Employees in engineering leadership roles at Staff+ and above are asked to provide 4 weeks of notice."
+  },
+  {
+    "id": "lost_device_reporting",
+    "query": "How quickly must a lost or stolen company laptop be reported to IT?",
+    "file_ref": "acme_handbook",
+    "ground_truth": "A lost or stolen device must be reported to IT within 1 hour of noticing it is missing."
+  },
+  {
+    "id": "aggregate_approvals",
+    "query": "Compare the approval requirements for remote work and expense reimbursement.",
+    "file_ref": "acme_handbook",
+    "ground_truth": "Remote work needs no approval up to 3 days/week, but fully remote (5 days) needs manager and HR sign-off reviewed every 6 months. Expenses under $75 need no approval, but $75 or more requires manager approval before submission."
+  },
+  {
+    "id": "summarize_handbook",
+    "query": "Summarize this document.",
+    "file_ref": "acme_handbook",
+    "ground_truth": "The document covers PTO (22 days/year, no rollover above 5 days), remote work (up to 3 days free, 5 days needs sign-off), expense reimbursement (under $75 no approval, $75+ needs approval), a 2-week notice period (4 weeks for Staff+ engineering leadership), and a security policy requiring disk encryption, MDM, and reporting lost devices within 1 hour."
+  }
+]

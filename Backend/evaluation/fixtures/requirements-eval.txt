@@ -1,0 +1,12 @@
+# Dev/CI-only dependencies for evaluation/run_ragas_eval.py.
+#
+# Deliberately NOT merged into Backend/requirements.txt or installed in
+# the Dockerfile. ragas pulls in roughly 250-400MB of wheels, 
+# none of which the running API needs at request time 
+#
+# Install with:
+#   pip install -r evaluation/requirements-eval.txt
+
+ragas>=0.2,<0.3
+datasets>=2.19,<3
+langchain-openai>=0.2,<0.3

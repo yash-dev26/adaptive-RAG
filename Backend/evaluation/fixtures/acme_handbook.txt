@@ -1,0 +1,49 @@
+# Acme Corp Employee Handbook (Fixture Document)
+
+This is a synthetic fixture document used only by the evaluation suite in
+this folder. It is not a real policy document. Facts below are made up
+specifically so they can be checked exactly (see cases/golden_set.json).
+
+## Paid Time Off
+
+Full-time employees accrue 22 days of paid time off (PTO) per calendar
+year, credited in full at the start of January. PTO does not roll over
+between years; unused days above 5 are forfeited on December 31st. New
+hires who join after July 1st receive a prorated 11 days for their first
+year. PTO requests must be submitted at least 5 business days in advance
+through the HR portal, except for emergency leave, which can be requested
+retroactively within 48 hours.
+
+## Remote Work Policy
+
+Employees may work remotely up to 3 days per week without prior approval.
+Fully remote arrangements (5 days per week) require written sign-off from
+both the employee's manager and HR, and are reviewed every 6 months.
+Remote employees are expected to be reachable during core hours, 10am to
+4pm in their local time zone. Equipment stipends for remote setup are
+capped at $500 per employee, reimbursed once per 24-month period.
+
+## Expense Reimbursement
+
+Business expenses under $75 can be submitted with a receipt photo through
+the mobile app and are typically reimbursed within 3 business days.
+Expenses of $75 or more require a manager's approval before submission.
+Travel expenses (flights, hotels) must be booked through the corporate
+travel portal to qualify for reimbursement; expenses booked independently
+are reimbursed at 50% of the standard rate.
+
+## Notice Period
+
+Employees who resign are asked to provide 2 weeks of written notice.
+Employees in engineering leadership roles (Staff+ and above) are asked to
+provide 4 weeks of notice to allow for knowledge transfer. Acme reserves
+the right to end employment immediately in lieu of notice, in which case
+the employee is paid for the notice period.
+
+## Data & Security Policy
+
+All company laptops must have disk encryption enabled and are enrolled in
+mobile device management (MDM) automatically on first login. Employees
+must report a lost or stolen device to IT within 1 hour of noticing it is
+missing. Production database access requires two-factor authentication
+and is logged; access is reviewed quarterly by the security team.

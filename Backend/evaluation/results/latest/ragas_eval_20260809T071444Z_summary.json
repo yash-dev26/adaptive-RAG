@@ -1,0 +1,76 @@
+{
+  "generated_at": "2026-08-09T07:14:44.339495+00:00",
+  "cases": 8,
+  "mean_scores": {
+    "faithfulness": 0.9315476190476191,
+    "answer_relevancy": 0.9157579622053696,
+    "context_precision": 0.8749999999125,
+    "context_recall": 0.9375
+  },
+  "per_case": [
+    {
+      "id": "pto_new_hire",
+      "question": "How many PTO days does a new hire who joins in September get in their first year?",
+      "faithfulness": 0.6666666666666666,
+      "answer_relevancy": 0.9164084825107088,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "id": "pto_rollover",
+      "question": "Do unused PTO days roll over into the next year?",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.9999999999999996,
+      "context_precision": 0.9999999999,
+      "context_recall": 0.5
+    },
+    {
+      "id": "remote_full_time_approval",
+      "question": "What approval is needed to work fully remote, five days a week?",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.9077564005476407,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "id": "expense_threshold",
+      "question": "At what expense amount do I need manager approval before submitting?",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.8583546419290253,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "id": "notice_period_staff_plus",
+      "question": "How much notice does a Staff+ engineering leader need to give when resigning?",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.9783994666089345,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "id": "lost_device_reporting",
+      "question": "How quickly must a lost or stolen company laptop be reported to IT?",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.9201429720631374,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    },
+    {
+      "id": "aggregate_approvals",
+      "question": "Compare the approval requirements for remote work and expense reimbursement.",
+      "faithfulness": 0.7857142857142857,
+      "answer_relevancy": 0.9611224819592267,
+      "context_precision": 0.0,
+      "context_recall": 1.0
+    },
+    {
+      "id": "summarize_handbook",
+      "question": "Summarize this document.",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.7838792520242839,
+      "context_precision": 0.9999999999,
+      "context_recall": 1.0
+    }
+  ]
+}

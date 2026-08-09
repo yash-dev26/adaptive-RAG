@@ -42,13 +42,27 @@ def _build_messages(state: GraphState) -> tuple[list, bool]:
         )
 
     if context:
+        # Each document gets its own tagged, indexed block, and the whole
+        # set is wrapped in <retrieved_context> matching what
+        # RAG_SYSTEM_PROMPT's "Security" section tells the model to treat
+        # as untrusted data. Explicit tags make that boundary
+        # something the model can actually reason about, and put clear
+        # daylight between "content to read" and "the query to answer".
         context_text = "\n\n".join(
-            f"[Doc {i + 1}] {doc['text']}" for i, doc in enumerate(context)
+            f'<document index="{i + 1}" source="{doc.get("source", "file")}">\n'
+            f'{doc["text"]}\n'
+            f'</document>'
+            for i, doc in enumerate(context)
         )
         return (
             [
                 SystemMessage(content=RAG_SYSTEM_PROMPT),
-                HumanMessage(content=f"Context:\n{context_text}\n\nQuery:\n{state.query}"),
+                HumanMessage(
+                    content=(
+                        f"<retrieved_context>\n{context_text}\n</retrieved_context>\n\n"
+                        f"Query:\n{state.query}"
+                    )
+                ),
             ],
             False,
         )

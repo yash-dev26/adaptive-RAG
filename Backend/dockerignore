@@ -1,0 +1,22 @@
+# Dev/eval tooling, not part of the runtime image (see evaluation/README.md
+# and evaluation/requirements-eval.txt; ragas alone pulls in ~250-400MB of
+# transitive deps via `datasets`/pyarrow that the running API never needs).
+evaluation/
+
+uploaded_files/
+*.log
+.git/
+.gitignore
+.vscode/
+.idea/
+.DS_Store
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+.env
+.env.*

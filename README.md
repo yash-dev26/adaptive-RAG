@@ -1,4 +1,4 @@
-﻿# Adaptive RAG
+# Adaptive RAG
 
 A Retrieval-Augmented Generation system that doesn't just retrieve-then-generate — it **plans** whether retrieval is needed, **rewrites** queries that won't retrieve well, **grades** what comes back (CRAG-style), and only then decides how to answer. Built with FastAPI, LangGraph, Qdrant, Redis, MongoDB, Cohere, and a React/Vite frontend.
 

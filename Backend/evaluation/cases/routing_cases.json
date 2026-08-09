@@ -1,0 +1,84 @@
+[
+  {
+    "id": "qa_grounded",
+    "description": "Clear, well-covered question — should retrieve and answer directly, no rewrite/fallback needed.",
+    "query": "How many PTO days do full-time employees accrue per year?",
+    "file_ref": "acme_handbook",
+    "expect": {
+      "task_type": "qa",
+      "intent": "rag",
+      "must_visit": ["pre_planner", "retrieve", "evaluator", "generate"],
+      "must_not_visit": ["rewrite_single", "rewrite_multi", "web_search"]
+    }
+  },
+  {
+    "id": "aggregate_cross_section",
+    "description": "Requires combining two different sections — should trigger the multi-rewrite fan-out.",
+    "query": "Compare the remote work policy and the expense reimbursement policy — what approvals does each need?",
+    "file_ref": "acme_handbook",
+    "expect": {
+      "task_type": "aggregate",
+      "intent": "rag",
+      "must_visit": ["pre_planner", "multi_rewrite", "retrieve", "evaluator", "generate"],
+      "must_not_visit": ["web_search"]
+    }
+  },
+  {
+    "id": "summarize_whole_doc",
+    "description": "Explicit summarize request — should skip retrieval entirely and go through summarize -> generate.",
+    "query": "Summarize this document for me.",
+    "file_ref": "acme_handbook",
+    "expect": {
+      "task_type": "summarize",
+      "intent": "rag",
+      "must_visit": ["pre_planner", "summarize", "generate"],
+      "must_not_visit": ["retrieve", "evaluator"]
+    }
+  },
+  {
+    "id": "out_of_document_fallback",
+    "description": "On-topic-sounding but genuinely absent from the doc — should exhaust rewrites and fall back (to web_search if Tavily is configured, otherwise straight to a disclaimed bare answer). Which of those two is asserted dynamically from the observed tavily_configured flag, not hardcoded, since that depends on the environment the eval runs in.",
+    "query": "What is Acme's parental leave policy?",
+    "file_ref": "acme_handbook",
+    "expect": {
+      "intent": "rag",
+      "must_visit": ["pre_planner", "retrieve", "evaluator", "generate"],
+      "eval_action_in": ["llm_fallback"],
+      "fallback_branch": "dynamic_on_tavily_configured"
+    }
+  },
+  {
+    "id": "general_knowledge_no_file",
+    "description": "No file attached, general-knowledge question — should never touch retrieval at all.",
+    "query": "What is the boiling point of water at sea level in Celsius?",
+    "file_ref": null,
+    "expect": {
+      "intent": "llm",
+      "task_type": "general_knowledge",
+      "must_visit": ["pre_planner", "generate"],
+      "must_not_visit": ["retrieve", "evaluator", "summarize", "single_rewrite", "multi_rewrite"]
+    }
+  },
+  {
+    "id": "chitchat_no_file",
+    "description": "Exact-phrase chitchat match against _CHITCHAT_PHRASES (planner.py) — must be one of the literal short phrases in that set, not a full sentence, or this exercises the general_knowledge path instead and the task_type assertion below will (correctly) fail.",
+    "query": "hey",
+    "file_ref": null,
+    "expect": {
+      "intent": "llm",
+      "task_type": null,
+      "must_visit": ["pre_planner", "generate"],
+      "must_not_visit": ["retrieve", "evaluator", "summarize"]
+    }
+  },
+  {
+    "id": "ambiguous_pronoun_triggers_rewrite",
+    "description": "Vague pronoun reference with a file attached — should hit the ambiguity heuristic and single-rewrite before retrieving.",
+    "query": "what about that one",
+    "file_ref": "acme_handbook",
+    "expect": {
+      "intent": "rag",
+      "must_visit": ["pre_planner", "single_rewrite", "retrieve"]
+    }
+  }
+]

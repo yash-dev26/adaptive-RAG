@@ -1,0 +1,163 @@
+{
+  "generated_at": "2026-08-09T06:55:46.060972+00:00",
+  "total": 7,
+  "passed": 7,
+  "failed": 0,
+  "results": [
+    {
+      "id": "qa_grounded",
+      "description": "Clear, well-covered question \u00e2\u20ac\u201d should retrieve and answer directly, no rewrite/fallback needed.",
+      "query": "How many PTO days do full-time employees accrue per year?",
+      "passed": true,
+      "failures": [],
+      "trace": [
+        "pre_planner",
+        "retrieve",
+        "evaluator",
+        "trim_docs",
+        "generate"
+      ],
+      "observed": {
+        "task_type": "qa",
+        "intent": "rag",
+        "eval_action": "generate",
+        "rewrite_attempts": 1,
+        "tavily_configured": true,
+        "confidence": 0.7652962
+      }
+    },
+    {
+      "id": "aggregate_cross_section",
+      "description": "Requires combining two different sections \u00e2\u20ac\u201d should trigger the multi-rewrite fan-out.",
+      "query": "Compare the remote work policy and the expense reimbursement policy \u00e2\u20ac\u201d what approvals does each need?",
+      "passed": true,
+      "failures": [],
+      "trace": [
+        "pre_planner",
+        "multi_rewrite",
+        "retrieve",
+        "evaluator",
+        "rerank",
+        "generate"
+      ],
+      "observed": {
+        "task_type": "aggregate",
+        "intent": "rag",
+        "eval_action": "generate",
+        "rewrite_attempts": 1,
+        "tavily_configured": true,
+        "confidence": 0.71398616
+      }
+    },
+    {
+      "id": "summarize_whole_doc",
+      "description": "Explicit summarize request \u00e2\u20ac\u201d should skip retrieval entirely and go through summarize -> generate.",
+      "query": "Summarize this document for me.",
+      "passed": true,
+      "failures": [],
+      "trace": [
+        "pre_planner",
+        "summarize",
+        "generate"
+      ],
+      "observed": {
+        "task_type": "summarize",
+        "intent": "rag",
+        "eval_action": null,
+        "rewrite_attempts": null,
+        "tavily_configured": true,
+        "confidence": null
+      }
+    },
+    {
+      "id": "out_of_document_fallback",
+      "description": "On-topic-sounding but genuinely absent from the doc \u00e2\u20ac\u201d should exhaust rewrites and fall back (to web_search if Tavily is configured, otherwise straight to a disclaimed bare answer). Which of those two is asserted dynamically from the observed tavily_configured flag, not hardcoded, since that depends on the environment the eval runs in.",
+      "query": "What is Acme's parental leave policy?",
+      "passed": true,
+      "failures": [],
+      "trace": [
+        "pre_planner",
+        "retrieve",
+        "evaluator",
+        "web_search",
+        "generate"
+      ],
+      "observed": {
+        "task_type": "qa",
+        "intent": "rag",
+        "eval_action": "llm_fallback",
+        "rewrite_attempts": 1,
+        "tavily_configured": true,
+        "confidence": 0.65
+      }
+    },
+    {
+      "id": "general_knowledge_no_file",
+      "description": "No file attached, general-knowledge question \u00e2\u20ac\u201d should never touch retrieval at all.",
+      "query": "What is the boiling point of water at sea level in Celsius?",
+      "passed": true,
+      "failures": [],
+      "trace": [
+        "pre_planner",
+        "web_search",
+        "generate"
+      ],
+      "observed": {
+        "task_type": "general_knowledge",
+        "intent": "llm",
+        "eval_action": null,
+        "rewrite_attempts": null,
+        "tavily_configured": true,
+        "confidence": 0.65
+      }
+    },
+    {
+      "id": "chitchat_no_file",
+      "description": "Exact-phrase chitchat match against _CHITCHAT_PHRASES (planner.py) \u00e2\u20ac\u201d must be one of the literal short phrases in that set, not a full sentence, or this exercises the general_knowledge path instead and the task_type assertion below will (correctly) fail.",
+      "query": "hey",
+      "passed": true,
+      "failures": [],
+      "trace": [
+        "pre_planner",
+        "generate"
+      ],
+      "observed": {
+        "task_type": null,
+        "intent": "llm",
+        "eval_action": null,
+        "rewrite_attempts": null,
+        "tavily_configured": true,
+        "confidence": null
+      }
+    },
+    {
+      "id": "ambiguous_pronoun_triggers_rewrite",
+      "description": "Vague pronoun reference with a file attached \u00e2\u20ac\u201d should hit the ambiguity heuristic and single-rewrite before retrieving.",
+      "query": "what about that one",
+      "passed": true,
+      "failures": [],
+      "trace": [
+        "pre_planner",
+        "single_rewrite",
+        "retrieve",
+        "evaluator",
+        "single_rewrite",
+        "retrieve",
+        "evaluator",
+        "single_rewrite",
+        "retrieve",
+        "evaluator",
+        "web_search",
+        "generate"
+      ],
+      "observed": {
+        "task_type": "qa",
+        "intent": "rag",
+        "eval_action": "llm_fallback",
+        "rewrite_attempts": 3,
+        "tavily_configured": true,
+        "confidence": 0.65
+      }
+    }
+  ]
+}

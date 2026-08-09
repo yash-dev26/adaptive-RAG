@@ -11,6 +11,7 @@ from app.config.rate_limiter import limiter
 router = APIRouter()
 
 @router.post("/")
+@limiter.limit("8/minute")
 async def chat(
     payload: ChatRequest,
     request: Request,
