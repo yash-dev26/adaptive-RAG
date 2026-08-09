@@ -1,10 +1,10 @@
 # Adaptive RAG
 
-A Retrieval-Augmented Generation system that doesn't just retrieve-then-generate — it **plans** whether retrieval is needed, **rewrites** queries that won't retrieve well, **grades** what comes back (CRAG-style), and only then decides how to answer. Built with FastAPI, LangGraph, Qdrant, Redis, MongoDB, Cohere, and a React/Vite frontend.
+A production-oriented Retrieval-Augmented Generation system that treats retrieval as a **decision process rather than a fixed retrieve → generate pipeline**.
 
-**[Live demo →](https://adaptive-rag-1.vercel.app/)**
+The system dynamically decides whether retrieval is required, classifies the task, rewrites weak queries, performs hybrid dense+sparse retrieval, evaluates retrieved evidence, conditionally reranks, and falls back to web search or general knowledge when appropriate.
 
-It's a bring-your-own-key (BYOK) app — there's no login and no server-side inference cost. You supply an OpenAI key (required) and optionally a Groq key from a modal in the UI; the backend uses them per-request and never persists them.
+**Live Demo:** https://adaptive-rag-1.vercel.app/
 
 ![Python](https://img.shields.io/badge/-Python-14161A?style=flat-square&logo=python&logoColor=3776AB)
 ![LangGraph](https://img.shields.io/badge/-LangGraph-14161A?style=flat-square&logo=langchain&logoColor=1C3C3C)
@@ -21,284 +21,357 @@ It's a bring-your-own-key (BYOK) app — there's no login and no server-side inf
 
 ---
 
-## At a glance
+## Impact
 
-- **A real decision-making pipeline, not a demo wrapper around an LLM call.** Three independent routing points (retrieve-or-not, rewrite-or-not, rerank-or-not) implemented as a LangGraph state machine — every node and edge below maps directly to code, not a simplified diagram of an aspiration.
-- **Multi-provider inference with cost-awareness baked in**: Groq for cheap/fast orchestration steps (rewriting, intent classification), OpenAI reserved for user-facing generation and grading, Cohere only invoked when ranking is genuinely ambiguous. All behind one abstraction with automatic fallback.
-- **Three-layer caching** (embedding / exact-response / semantic) with correct multi-tenant scoping — including a fix for a real bug class (no-file queries being served file-scoped cached answers).
-- **No auth, but real isolation**: BYOK session model where API keys are read per-request, threaded through LangGraph config, and never written to a persisted checkpoint.
-- **Full conversation memory**: MongoDB-backed thread history with a session sidebar, so users can pick up a past conversation and see which document it was grounded in.
-- **Streaming transparency**: the frontend renders each LangGraph node as a live SSE event, so the adaptive routing is visible to the user in real time instead of a spinner hiding a black box.
+| Area | Result |
+|---|---|
+| Routing correctness | **7/7 scenarios passed** against real graph traces |
+| Faithfulness | **0.93** mean on 8-case Ragas golden set |
+| Answer relevancy | **0.92** mean |
+| Context precision | **0.87** mean |
+| Context recall | **0.94** mean |
+| Deployment constraint | Runs within **Render's 512 MB** memory budget |
+| Reliability | OpenAI, Groq, Cohere, and Qdrant calls share bounded exponential-backoff retry handling |
+| Memory efficiency | Streaming upload path avoids buffering entire files in memory |
+| Observability | Node-level SSE execution trace plus LangSmith tracing support |
 
----
-
-## Why "adaptive" (and a touch of CRAG)
-
-Most portfolio RAG projects hardcode the pipeline: embed the query, search the vector store, stuff the top-k into a prompt, generate. That works on the happy path and falls apart the moment a query doesn't need retrieval, is too vague to retrieve well, or retrieval comes back irrelevant.
-
-This project treats each of those as a decision point instead of a fixed step:
-
-- **Should we even retrieve?** A heuristic + LLM planner routes chit-chat and general-knowledge questions straight to the LLM, skipping retrieval entirely.
-- **Is the query retrievable as-is?** Ambiguous queries ("what about it?") get rewritten using conversation history before they ever hit the vector store.
-- **Was retrieval any good?** This is the CRAG-inspired part — a post-retrieval evaluator grades the retrieved context (not the query) using similarity-score heuristics first, falling back to an LLM grader only when the scores are ambiguous, and routes to *generate*, *rewrite and retry*, or *give up on retrieval and answer from general knowledge*.
-- **Do we need to pay for reranking?** Only documents that are genuinely ambiguous in ranking get sent to a Cohere reranker; a clear score gap skips straight to generation.
-
-The result is a graph, not a pipeline — built and executed with LangGraph.
+The evaluation suite is separated into routing correctness and answer/retrieval quality so failures can be attributed to the orchestration layer or the RAG quality layer independently.
 
 ---
 
-## System architecture
+## Table of Contents
 
+- [System Architecture](#system-architecture)
+- [Engineering Highlights & Reliability](#engineering-highlights--reliability)
+- [Evaluation & Observability](#evaluation--observability)
+- [Local Setup & Repository Structure](#local-setup--repository-structure)
+
+---
+
+## System Architecture
+
+### Request and Data Flow
+---
+
+```mermaid
+flowchart LR
+    UI[React / Vite] --> API[FastAPI]
+    API --> ING[Ingestion]
+    API --> GRAPH[LangGraph]
+    API --> CACHE[Redis / Qdrant Cache]
+
+    ING --> Q[Qdrant]
+    GRAPH --> Q
+    GRAPH --> REDIS[Redis]
+    GRAPH --> MONGO[MongoDB]
+
+    GRAPH --> OAI[OpenAI]
+    GRAPH --> GROQ[Groq]
+    GRAPH --> COH[Cohere]
+    GRAPH --> TAV[Tavily]
+
+    GRAPH -. SSE trace .-> UI
+```
+--- 
+---
+### Adaptive Routing
+---
 ```mermaid
 flowchart TD
-    subgraph Client["React Client (Vite)"]
-        UI["Chat UI + BYOK key modal + session sidebar"]
-    end
+    Q[User Query] --> P[Planner]
 
-    subgraph API["FastAPI"]
-        Auth["Session + BYOK key extraction<br/>(X-Session-Id, X-OpenAI-Key, X-Groq-Key)"]
-        RateLimit["slowapi rate limiting<br/>(per session id, fallback to IP)"]
-        ChatRoute["/chat, /chat/stream"]
-        UploadRoute["/upload"]
-        ThreadsRoute["/threads"]
-    end
+    P -->|General knowledge / chit-chat| G[Generate]
+    P -->|Ambiguous| R[Rewrite]
+    P -->|QA / clear retrieval| RET[Hybrid Retrieve]
+    P -->|Aggregate / comparison| MR[Multi Rewrite]
 
-    subgraph Ingestion["Ingestion pipeline"]
-        Parse["pymupdf4llm: PDF → Markdown"]
-        Chunk["RecursiveCharacterTextSplitter"]
-        Dedup["Content-hash duplicate detection"]
-        Embed["OpenAI embeddings<br/>(text-embedding-3-small, 384d)"]
-    end
+    R --> RET
+    MR --> RET
 
-    subgraph Graph["LangGraph orchestration"]
-        direction TB
-        GraphNodes["Planner → Rewrite → Retrieve →<br/>Evaluate → Rerank/Trim → Generate"]
-    end
+    RET --> E[Evidence Evaluator]
 
-    subgraph Stores["Data layer"]
-        Qdrant[("Qdrant<br/>document chunks + semantic cache")]
-        Redis[("Redis<br/>embedding cache + response cache")]
-        Mongo[("MongoDB<br/>LangGraph checkpoints + chat_sessions")]
-    end
+    E -->|Strong evidence| D{Ranking clear?}
+    E -->|Weak evidence + retries| R
+    E -->|Retries exhausted| F[Web / General Knowledge]
+    E -->|Ambiguous score| J[LLM Evidence Judge]
 
-    subgraph Providers["LLM providers"]
-        OpenAI["OpenAI<br/>embeddings, final generation, evaluator"]
-        Groq["Groq (Llama 3.3 70B)<br/>query rewriting, planner classification"]
-        Cohere["Cohere rerank-v3.5<br/>context reranking"]
-    end
+    J --> D
+    J --> R
+    J --> F
 
-    UI -->|"query / upload"| Auth
-    Auth --> RateLimit --> ChatRoute
-    RateLimit --> UploadRoute
-    Auth --> ThreadsRoute
+    D -->|Clear| G
+    D -->|Ambiguous| RR[Cohere Rerank]
+    RR --> G
 
-    UploadRoute --> Parse --> Chunk --> Dedup --> Embed --> Qdrant
-    ChatRoute --> GraphNodes
-
-    GraphNodes <--> Qdrant
-    GraphNodes <--> Redis
-    GraphNodes <--> Mongo
-    GraphNodes <--> OpenAI
-    GraphNodes <--> Groq
-    GraphNodes <--> Cohere
-
-    ChatRoute -.->|"SSE: node-by-node trace"| UI
-    ThreadsRoute --> Mongo
+    G --> OUT[Response + Sources]
+    F --> OUT
 ```
-
 ---
-
-## The LangGraph pipeline
-
-This is the actual graph defined in `graphBuilder.py` — every node and every conditional edge below maps 1:1 to code.
-
+---
+### Retrieval
+---
 ```mermaid
-flowchart TD
-    START(["User query"]) --> Planner["pre_planner<br/><i>heuristic chit-chat/ambiguity check,<br/>falls back to LLM intent classification</i>"]
+flowchart LR
+    Q[Query] --> D[Dense Embedding]
+    Q --> S[Sparse Embedding]
 
-    Planner -->|"no file attached, or<br/>chit-chat / general knowledge"| LLM["llm<br/><i>answer from general knowledge</i>"]
-    Planner -->|"ambiguous query"| SingleRewrite
-    Planner -->|"needs retrieval, query is clear"| Retrieve
+    D --> DV[Qdrant Dense Search]
+    S --> SV[Qdrant Sparse Search]
 
-    SingleRewrite["single_rewrite<br/><i>history-aware query rewrite</i>"] -->|"intent = rag"| Retrieve
-    SingleRewrite -->|"intent = llm"| LLM
+    DV --> RRF[Reciprocal Rank Fusion]
+    SV --> RRF
 
-    MultiRewrite["multi_rewrite<br/><i>generates 3 alternate queries</i>"] --> Retrieve
-
-    Retrieve["retrieve<br/><i>Qdrant search, RRF fusion if multi-query,<br/>scoped to user_id + file_id</i>"] --> Evaluator
-
-    Evaluator{{"evaluator<br/><i>CRAG-style retrieval grading</i>"}}
-
-    Evaluator -->|"top score ≥ 0.70,<br/>or good score + gap"| Decide{"context size"}
-    Evaluator -->|"no docs, or score < 0.45"| RewriteDecision{"retries left?"}
-    Evaluator -->|"ambiguous score band<br/>→ LLM grades the docs"| LLMGrade["LLM grader:<br/>generate / rewrite_single /<br/>rewrite_multi / llm_fallback"]
-    LLMGrade --> RewriteDecision
-    LLMGrade --> Decide
-    LLMGrade -->|"docs clearly irrelevant"| LLM
-
-    RewriteDecision -->|"attempts < 2"| SingleRewrite
-    RewriteDecision -->|"attempts < 2 (multi)"| MultiRewrite
-    RewriteDecision -->|"retries exhausted,<br/>no usable docs"| LLM
-    RewriteDecision -->|"retries exhausted,<br/>docs are usable"| Decide
-
-    Decide -->|"≤ 4 docs"| Generate
-    Decide -->|"large score gap"| Trim["trim_docs<br/><i>keep top 4, skip rerank</i>"]
-    Decide -->|"ambiguous ranking"| Rerank["rerank<br/><i>Cohere cross-encoder, top 4</i>"]
-
-    Trim --> Generate["generate<br/><i>answer grounded in context</i>"]
-    Rerank --> Generate
-
-    Generate --> END(["Response + sources"])
-    LLM --> END
+    RRF --> C[Ranked Context]
+    C --> E[Evidence Evaluation]
 ```
+---
+---
+**Core behavior**
 
-**Loop protection:** `rewrite_attempts` is tracked in graph state and capped at `MAX_REWRITE_ATTEMPTS = 2` (a single constant shared by the evaluator and the router, so the two can't drift out of sync). Once exhausted, the evaluator stops paying for its own LLM grading call — its suggestion would just get overridden by the router anyway — and routes deterministically based on whether *any* usable context exists.
+- Planner distinguishes **general knowledge, QA, summarization, and aggregate/comparison** tasks.
+- Single-query rewriting is history-aware; multi-query rewriting produces three retrieval variants.
+- Dense and sparse searches run concurrently and are fused with **RRF**, avoiding incompatible-score normalization.
+- Retrieval is scoped by `user_id` and `file_id`.
+- Evidence is evaluated before generation using score heuristics, with an LLM grader only for ambiguous cases.
+- Cohere reranking is invoked only when ranking is genuinely ambiguous.
+- Rewrite attempts are capped at **2** to bound latency and inference cost.
+- Tavily provides an optional external retrieval fallback when document evidence is insufficient.
+- Summarization uses a document-level condensation path rather than ordinary top-k QA.
 
 ---
 
-## Request flow: a chat message end-to-end
+## Engineering Highlights & Reliability
 
-```mermaid
-sequenceDiagram
-    participant U as Browser
-    participant API as FastAPI
-    participant Cache as Redis / Qdrant cache
-    participant Graph as LangGraph
-    participant Mongo as MongoDB
+### Memory-Constrained Deployment
 
-    U->>API: POST /chat/stream (query, thread_id, BYOK headers)
-    API->>Mongo: record_turn (upsert thread + title)
-    API->>Cache: semantic cache lookup (vector similarity)
-    alt semantic cache hit
-        Cache-->>API: cached response
-        API-->>U: SSE final event (cached: "semantic")
-    else exact cache hit
-        Cache-->>API: cached response
-        API-->>U: SSE final event (cached: true)
-    else cache miss
-        API->>Graph: astream(state, config={thread_id, api_keys})
-        loop per graph node
-            Graph-->>API: node update
-            API-->>U: SSE node event (running/done)
-        end
-        Graph->>Mongo: checkpoint state (conversation memory)
-        Graph-->>API: final response + context
-        API->>Cache: store response + semantic cache entries
-        API-->>U: SSE final event (response, sources)
-    end
-```
+The backend is deployed under Render's **512 MB memory constraint**, which drove several concrete optimizations:
 
-The frontend renders each `node` SSE event as a live pipeline trace ("Rewriting query…", "Evaluating retrieved context…", "Reranking…") so the adaptive routing is visible, not a black box.
+- **Streaming uploads:** files are read and hashed in 1 MB chunks instead of buffering the complete upload in memory; oversized partial files are cleaned up.
+- **Non-blocking document processing:** CPU-bound PDF parsing and chunking run through `asyncio.to_thread` rather than blocking the FastAPI event loop.
+- **Background task lifetime:** ingestion tasks retain a strong reference until completion so asynchronous work cannot silently disappear.
+- **Evaluation isolation:** Ragas dependencies remain in `evaluation/requirements-eval.txt` and are excluded from the production image.
 
----
+### Three-Layer Caching
 
-## Conversation memory & threads
+| Layer | Store | Key / Condition | TTL |
+|---|---|---|---:|
+| Embedding | Redis | SHA-256(text) | — |
+| Exact response | Redis | `user_id + file_id + query` | 10h |
+| Semantic response | Qdrant | Similarity **≥ 0.72** | 10h |
 
-Every turn is recorded to MongoDB against a `thread_id`, and thread titles are derived automatically — from the uploaded filename if a document is attached, otherwise from the query itself. The session sidebar (`SessionSidebar.jsx` + `useThreads.js`) lists past conversations per browser session; reopening one restores both the message history and which file it was grounded in, so a thread never loses context about what document it was actually answering questions from.
+Semantic cache entries are explicitly scoped to the same document context, including a separate no-file case. Low-confidence responses are not cached, and expired semantic entries are cleaned periodically.
 
----
+### BYOK and Isolation
 
-## Retrieval-augmented caching (three layers)
+- OpenAI key is required; Groq key is optional.
+- Keys are supplied per request and passed through LangGraph's `configurable` runtime channel.
+- Inference credentials are **not persisted in MongoDB checkpoints, logged, or cached**.
+- Browser session IDs isolate uploads, threads, and retrieval through `user_id` filters; they are **not treated as authentication**.
 
-| Layer | Store | Key | TTL | Purpose |
-|---|---|---|---|---|
-| Embedding cache | Redis | SHA-256 of text | none | Skip re-embedding identical text |
-| Response cache | Redis | `user_id + file_id + query` (exact) | 10h | Skip the whole graph for repeated exact queries |
-| Semantic cache | Qdrant (separate collection) | embedding similarity ≥ 0.72 | 10h | Skip the whole graph for *paraphrased* repeated queries |
+### Provider Strategy
 
-The semantic cache is scoped by `user_id` and `file_id` — including explicitly requiring "no file attached" to match only other no-file entries, so a no-document chit-chat query can never get served an answer that was actually generated from someone's uploaded PDF. A background task (`cleanup_semantic_cache`) sweeps expired entries out of Qdrant every 10 minutes.
+Provider selection is workload-specific rather than one-model-for-everything:
 
-Responses are only cached when the evaluator's confidence is `None` (a direct LLM answer, not eval'd) or `> 0.6` — low-confidence RAG answers aren't cached, so a bad answer doesn't get served repeatedly.
-
----
-
-## Multi-provider LLM routing
-
-| Task | Provider | Why |
+| Workload | Provider | Engineering rationale |
 |---|---|---|
-| Query rewriting (single + multi) | Groq (Llama 3.3 70B) | High-frequency orchestration step; fast and cheap |
-| Planner intent classification | Groq (Llama 3.3 70B) | Same — only invoked when heuristics can't decide |
-| Retrieval evaluation (LLM grader) | OpenAI (gpt-4.1-mini) | Only hit when similarity scores are ambiguous; worth the extra quality |
-| Final answer generation | OpenAI (gpt-4.1-mini) | User-facing output — quality matters most here |
-| Embeddings | OpenAI (text-embedding-3-small) | Truncated to 384 dims to keep Qdrant storage/compute small |
-| Reranking | Cohere (rerank-v3.5) | Only called for ambiguous-ranking cases, not every query |
+| Planner / intent classification | Groq — Llama 3.3 70B | Fast, high-frequency orchestration; heuristics avoid the call when possible |
+| Single + multi-query rewriting | Groq — Llama 3.3 70B | Low-latency query transformation |
+| Retrieval evidence grading | OpenAI — gpt-4.1-mini | Higher-quality judgment, invoked only for ambiguous retrieval scores |
+| Final generation | OpenAI — gpt-4.1-mini | User-facing quality and grounding |
+| Dense embeddings | OpenAI — text-embedding-3-small | Semantic retrieval |
+| Reranking | Cohere — rerank-v3.5 | Cross-encoder relevance scoring, conditionally invoked |
+| Web fallback | Tavily | External evidence when document retrieval cannot produce usable context |
 
-All LLM calls go through a single `generate_completion()` provider abstraction. If a Groq call is requested without a Groq key, it transparently falls back to OpenAI; if a Groq call *fails* (rate limit, outage), it also falls back to OpenAI rather than surfacing an error. Swapping in another provider (Anthropic, Gemini, a local model) means adding one branch in that one function — no graph node needs to know provider details.
+All model calls are routed through a provider abstraction. Groq failures or missing Groq configuration can fall back to OpenAI without requiring graph nodes to know provider-specific details.
+
+### Security and Reliability
+
+- **BYOK isolation:** OpenAI/Groq keys are request-scoped through LangGraph `configurable`; they are not persisted in MongoDB checkpoints, logged, or cached.
+- **Session isolation:** browser session IDs scope Qdrant and MongoDB data; they are explicitly **not authentication**.
+- **Prompt-injection boundary:** retrieved documents and web results are treated as untrusted data rather than executable instructions.
+- **External-call resilience:** OpenAI, Groq, Cohere, and Qdrant use shared exponential-backoff retry handling for transient `5xx`, `429`, and connection failures; permanent `4xx` errors are not blindly retried.
+- **Bounded graph recovery:** rewrite attempts are capped at **2**, preventing runaway latency/cost.
+- **API protection:** rate limiting and `/api/v1/health` support production request safety and health checks.
+- **Container hardening:** multi-stage Docker build, non-root runtime, and runtime-only dependencies.
+- **Resource-aware execution:** CPU-bound PDF parsing/chunking runs through `asyncio.to_thread`; uploads stream to disk in 1 MB chunks.
+- **Background-task safety:** ingestion tasks retain strong references until completion, preventing asynchronous work from disappearing silently.
+
+### Streaming and Persistence
+
+- SSE exposes `status`, cache-hit, node execution, final response, source, confidence, and error events.
+- The frontend renders node execution as a live pipeline trace.
+- MongoDB stores conversation threads and LangGraph checkpoints.
+- Reopening a thread restores message history and document context.
+- Ingestion supports PDF, TXT, and DOCX sources with content-hash deduplication.
+- Chunk overlap is deduplicated before vector storage.
 
 ---
 
-## Identity & BYOK (not authentication)
+### Query Rewriting
 
-There's no login. Each browser generates a random session id once (`localStorage`) and sends it as `X-Session-Id` on every request — this exists purely to keep one browser's uploads and chat history isolated from another's via Qdrant/Mongo payload filtering, not as an auth mechanism.
+Rewriting is a recovery mechanism, not a default preprocessing step.
 
-Inference is bring-your-own-key: `X-OpenAI-Key` (required) and `X-Groq-Key` (optional) headers are read fresh per request, passed through LangGraph's `configurable` channel, and used only for the duration of that request. They are never written to `GraphState` (which MongoDB checkpoints every turn), never logged, and never cached.
+- **Single rewrite:** history-aware reformulation for ambiguous or weak queries.
+- **Multi rewrite:** generates three retrieval variants for aggregate/comparison requests.
+- Rewritten queries are independently retrieved and fused with the same RRF mechanism.
 
----
+```mermaid
+flowchart LR
+    Q[Original Query] --> M[Multi Rewrite]
+    M --> Q1[Query 1]
+    M --> Q2[Query 2]
+    M --> Q3[Query 3]
 
-## Repository layout
+    Q1 --> R[RRF Fusion]
+    Q2 --> R
+    Q3 --> R
 
-```text
-Backend/
-└── app/
-    ├── agent/graph/
-    │   ├── graphBuilder.py        # wires nodes + conditional edges
-    │   ├── keys.py                # extracts BYOK keys from RunnableConfig
-    │   ├── nodes/                 # planner, rewrite (single/multi), retriever,
-    │   │                          # evaluator, reranking, trim_docs, generate, llm
-    │   └── routing/                # conditional-edge decision functions
-    ├── api/v1/routes/             # chat, upload, threads, health
-    ├── auth/session.py            # BYOK session id + API key extraction
-    ├── cache/                     # embedding / response / semantic cache + cleanup task
-    ├── config/                    # env config, provider clients, Qdrant/Redis/Mongo/limiter setup
-    ├── ingestion/                 # PDF → markdown → chunks → embeddings
-    ├── repository/                # Qdrant + chat_sessions persistence
-    ├── retrieval/                 # vector search with payload filtering
-    ├── schemas/                   # Pydantic request/response/state/thread models
-    └── service/
-        ├── chatService.py         # orchestrates cache → graph → SSE for a chat turn
-        ├── graphRunner.py         # thread-id resolution + LangGraph run config
-        ├── sse.py                 # SSE event formatting + node trace metadata
-        ├── ingestService.py       # dedup check → parse → embed → store
-        ├── rerankingService.py    # Cohere rerank wrapper with fallback
-        └── threadService.py       # thread titles, message history for the sidebar
-
-Frontend/
-└── src/
-    ├── components/
-    │   ├── chat/                  # response feed, pipeline trace, doc/context panel, sidebar
-    │   ├── landing/                # marketing landing page
-    │   └── ui/                     # shadcn-style primitives
-    ├── context/ApiKeysContext.jsx # BYOK key state + modal visibility
-    ├── hooks/
-    │   ├── useChat.js              # composes the hooks below
-    │   ├── useChatStream.js        # SSE streaming + pipeline trace
-    │   ├── useEntries.js           # chat feed state
-    │   ├── useFileUpload.js        # PDF upload + ingestion status
-    │   ├── useThreads.js           # thread list + loading a past conversation
-    │   └── useApiHeaders.js        # BYOK request headers
-    ├── lib/                        # session id, API key storage, thread API client, misc utils
-    └── pages/                      # ChatPage, LandingPage
+    R --> C[Combined Context]
 ```
 
+
+- A shared `MAX_REWRITE_ATTEMPTS = 2` bounds recovery cost and keeps evaluator/router behavior synchronized.
+
+### Conditional Reranking
+
+Reranking is deliberately not applied to every request.
+
+After evidence evaluation:
+
+```mermaid
+flowchart TD
+    C[Retrieved Context] --> S{Ranking Clear?}
+    S -->|Yes| T[Keep Top 4]
+    S -->|No| R[Cohere Rerank]
+    T --> G[Generate]
+    R --> G
+```
+
+If there are four or fewer usable documents, generation proceeds directly.
+
+If more documents are available and the top scores have a clear separation, the system trims to the strongest four.
+
+Only ambiguous rankings invoke Cohere `rerank-v3.5`.
+
+This keeps the quality improvement of cross-encoder reranking without imposing its cost and latency on every query.
+
+### Summarization and Aggregate Queries
+
+The planner routes document tasks by workload instead of treating every request as top-k QA:
+
+- **Summarization:** document chunks → section summaries → reduction → final response, preserving names, numbers, and key facts.
+- **Aggregate/comparison:** multi-query fan-out retrieves evidence distributed across different document sections before fusion and generation.
+- This prevents narrow top-k retrieval from becoming the bottleneck for questions requiring document-wide evidence.
+
+### Web Search Fallback
+
+Tavily is an optional fallback path, reached only when document retrieval cannot produce usable evidence.
+
+```mermaid
+flowchart LR
+    E[Weak / Missing Evidence] --> T{Tavily configured?}
+    T -->|Yes| W[Tavily Search]
+    T -->|No| G[General Knowledge]
+    W --> A[Generate with external context]
+    G --> A
+```
+
+The routing evaluation treats the Tavily branch dynamically, validating the branch actually available in the test environment rather than hardcoding one deployment configuration.
+
+### Retrieval Evaluation
+
+Retrieval is evaluated before generation:
+
+1. Dense + sparse retrieval produces candidate evidence.
+2. Score heuristics classify evidence as strong, weak, or ambiguous.
+3. Ambiguous cases invoke an LLM evidence grader.
+4. The evaluator chooses **generate, rewrite/retry, or fallback**.
+5. Ranking ambiguity separately determines whether Cohere reranking is necessary.
+
+This separates **retrieval failure** from **generation failure** and avoids paying for an LLM judge on every request.
+---
+## Evaluation & Observability
+
+### 1. Routing Evaluation
+
+`run_routing_eval.py` executes the **real compiled graph** and asserts against state and node traces rather than judging the final answer.
+
+| Scenario | Expected behavior | Result |
+|---|---|---|
+| Clear QA | Retrieve → evaluate → generate | ✅ |
+| Cross-section comparison | Multi-rewrite → retrieve → rerank → generate | ✅ |
+| Summarization | Summary path; retrieval skipped | ✅ |
+| Missing document evidence | Rewrite exhaustion → fallback | ✅ |
+| General knowledge, no file | Retrieval skipped | ✅ |
+| Chit-chat | Retrieval skipped | ✅ |
+| Ambiguous reference | Rewrite before retrieval | ✅ |
+
+**Latest result: 7/7 passed.**
+
+The fallback case is environment-aware: the test validates the branch against whether Tavily is actually configured instead of hardcoding an environment-specific result.
+
+### 2. Ragas Quality Evaluation
+
+`run_ragas_eval.py` runs an **8-case golden set through the real graph** and evaluates:
+
+- **Faithfulness:** answer claims supported by retrieved context.
+- **Answer relevancy:** whether the answer addresses the question.
+- **Context precision:** relevance of retrieved context.
+- **Context recall:** whether required evidence was retrieved.
+
+| Metric | Mean |
+|---|---:|
+| Faithfulness | **0.932** |
+| Answer relevancy | **0.916** |
+| Context precision | **0.875** |
+| Context recall | **0.938** |
+
+The Ragas judge makes separate evaluation-model calls from the graph's own generation calls.
+
+Per-case results are retained so aggregate scores do not hide individual failure modes. For example, the comparison case exposes a low context-precision score because the query legitimately requires evidence from multiple document sections, while the prorated-PTO case exposes a faithfulness issue caused by an inference not explicitly stated in the source.
+
+Evaluation fixtures are ingested through the **same production ingestion path**, including chunking, embeddings, and Qdrant storage.
+
+### 3. LangSmith Tracing
+
+LangSmith tracing can expose actual graph execution, nested model calls, latency, and routing behavior.
+
+**[Screenshot placeholder — LangSmith multi-node trace]**
+
+```md
+![LangSmith trace](./docs/images/langsmith-trace.png)
+```
+
+**[Screenshot placeholder — LangSmith run details / latency]**
+
+```md
+![LangSmith run details](./docs/images/langsmith-run-details.png)
+```
+
+A rewrite → retry or fallback trace is the most useful demonstration because it proves the adaptive branches shown in the architecture are exercised in real execution.
+
 ---
 
-## Running locally
+## Local Setup & Repository Structure
 
-**Backend**
+### Backend
+
 ```bash
 cd Backend
+python -m venv venv
 pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-**Frontend**
+### Frontend
+
 ```bash
 cd Frontend
 npm install
 npm run dev
 ```
 
-### Environment variables (Backend)
+### Environment
 
 ```env
 QDRANT_URL=
@@ -313,35 +386,85 @@ REDIS_PORT=
 REDIS_PASSWORD=
 
 COHERE_API_KEY=
+TAVILY_API_KEY=
 
-CORS_ORIGINS=http://localhost:5173,http://localhost:5174
+CORS_ORIGINS=http://localhost:5173
+LANGSMITH_API_KEY=
+LANGSMITH_TRACING=false
+LANGSMITH_PROJECT=Adaptive RAG
 ```
 
-Note: OpenAI and Groq keys are **not** server env vars — they're supplied per-request by the client via BYOK headers.
+OpenAI and Groq inference keys are supplied through the BYOK request flow rather than stored as server-side inference credentials.
 
-### Environment variables (Frontend)
+Frontend:
 
 ```env
 VITE_API_BASE_URL=http://127.0.0.1:8000/api/v1
 ```
 
----
+### Evaluation
 
-## Tech stack
+```bash
+cd Backend
 
-**Backend:** Python 3.11, FastAPI, LangGraph, LangChain, Qdrant, Redis, MongoDB, slowapi (rate limiting), pymupdf4llm
-**LLM/inference:** OpenAI (gpt-4.1-mini, text-embedding-3-small), Groq (Llama 3.3 70B), Cohere (rerank-v3.5)
-**Frontend:** React 19, Vite, Tailwind CSS 4, React Router, react-markdown, axios
-**Infra:** Vercel (frontend), and any ASGI host for the backend (Render/Railway/Fly, etc.)
+python -m evaluation.seed_fixtures
+python -m evaluation.run_routing_eval
 
----
+pip install -r evaluation/requirements-eval.txt
+python -m evaluation.run_ragas_eval
+```
 
-## What this project demonstrates
+### Repository Structure
 
-- **Adaptive orchestration over a fixed pipeline** — LangGraph state machine with conditional routing at three separate decision points (plan, evaluate, rerank-or-not), not a linear retrieve→generate chain.
-- **CRAG-style retrieval grading** — grading the *evidence* before generating, with a cheap heuristic path and an LLM-grader fallback only when needed.
-- **Cost-aware multi-provider inference** — fast/cheap provider for high-frequency orchestration calls, higher-quality provider reserved for user-facing output, with automatic fallback.
-- **Layered caching** — embedding, exact-response, and semantic caches, each with an appropriate TTL and scope, plus a background expiry sweep.
-- **Correct multi-user isolation without real auth** — BYOK session model with retrieval-time payload filtering by `user_id`/`file_id`, and cache-scoping bugs (e.g. no-file queries matching file-scoped cache entries) treated as seriously as auth bugs would be.
-- **Conversation memory that's actually useful** — MongoDB-backed threads with auto-derived titles and persisted document context, not just a chat log.
-- **Streaming transparency** — SSE node-by-node trace so the adaptive decisions are visible to the end user in real time, not just in server logs.
+```text
+Backend/
+├── app/
+│   ├── agent/
+│   │   ├── graph/
+│   │   │   ├── graphBuilder.py        # wires nodes + conditional edges
+│   │   │   ├── nodes/                 # planner, rewrite, retrieval, evaluation,
+│   │   │   │                          # reranking, summarization, generation
+│   │   │   └── routing/               # conditional-edge decision functions
+│   │   ├── prompts/                   # prompts isolated from graph logic
+│   │   └── tools/                     # external retrieval / agent tools
+│   │
+│   ├── api/v1/routes/                 # chat, upload, threads, health
+│   ├── auth/                           # session and BYOK key handling
+│   ├── cache/                          # embedding, response, semantic cache + cleanup
+│   ├── config/                         # environment, providers, database configuration
+│   ├── ingestion/                      # parse → chunk → dense + sparse embeddings
+│   ├── retrieval/                      # hybrid search + RRF fusion
+│   ├── repository/                     # Qdrant + MongoDB persistence
+│   ├── schemas/                        # Pydantic request, response, and graph state models
+│   ├── service/                        # chat orchestration, SSE, provider routing
+│   └── utils/                          # shared retry and utility logic
+│
+├── evaluation/
+│   ├── run_routing_eval.py             # graph-path correctness
+│   ├── run_ragas_eval.py               # retrieval + answer quality
+│   ├── seed_fixtures.py                # seeds evaluation documents
+│   ├── cases/                          # routing cases + Ragas golden set
+│   └── results/latest/                 # latest evaluation results
+│
+└── Dockerfile                          # production multi-stage image
+
+Frontend/
+└── src/
+    ├── components/
+    │   └── chat/                       # response feed, pipeline trace, sidebar
+    ├── hooks/                          # SSE streaming, threads, uploads
+    ├── context/                        # BYOK/API key state
+    └── pages/                          # ChatPage, LandingPage
+```
+
+### Technology Stack
+
+**Backend:** Python 3.11, FastAPI, LangGraph, LangChain, Qdrant, Redis, MongoDB, slowapi, pymupdf4llm, tenacity
+
+**LLM / Retrieval:** OpenAI, Groq, Cohere, Tavily, dense + sparse retrieval, RRF
+
+**Evaluation:** Ragas, deterministic routing-trace assertions
+
+**Frontend:** React 19, Vite, Tailwind CSS 4, React Router, Axios, react-markdown
+
+**Infrastructure:** Docker, Vercel, Render, Qdrant, Redis, MongoDB, LangSmith
