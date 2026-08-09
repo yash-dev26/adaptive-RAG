@@ -329,21 +329,10 @@ Evaluation fixtures are ingested through the **same production ingestion path**,
 
 ### 3. LangSmith Tracing
 
-LangSmith tracing can expose actual graph execution, nested model calls, latency, and routing behavior.
+LangSmith provides production-oriented observability into the adaptive graph by tracing actual graph execution, nested model calls, routing decisions, and intermediate execution state.
 
-**[Screenshot placeholder — LangSmith multi-node trace]**
+![alt text](docs/langsmith_trace.png)
 
-```md
-![LangSmith trace](./docs/images/langsmith-trace.png)
-```
-
-**[Screenshot placeholder — LangSmith run details / latency]**
-
-```md
-![LangSmith run details](./docs/images/langsmith-run-details.png)
-```
-
-A rewrite → retry or fallback trace is the most useful demonstration because it proves the adaptive branches shown in the architecture are exercised in real execution.
 
 ---
 
@@ -452,3 +441,8 @@ Frontend/
     └── pages/                          # ChatPage, LandingPage
 ```
 
+---
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).

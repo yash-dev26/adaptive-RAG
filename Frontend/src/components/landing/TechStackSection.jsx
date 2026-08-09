@@ -6,8 +6,9 @@ const TECH_STACK = [
   { name: "Qdrant",     color: "#ef4444", desc: "Vector database" },
   { name: "Redis",      color: "#f97316", desc: "Semantic cache" },
   { name: "MongoDB",    color: "#22c55e", desc: "Checkpointing" },
+  { name: "Cohere",     color: "#6366f1", desc: "Reranking" },
+  { name: "Tavily",     color: "#06b6d4", desc: "Web search fallback" },
 ];
-
 
 function TechStackSection() {
   return (

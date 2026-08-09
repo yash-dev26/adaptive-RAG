@@ -34,6 +34,20 @@ _AGGREGATE_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# Reset per-turn fields so checkpointed state from previous turns
+# cannot leak into the current query. Messages persist intentionally.
+_FRESH_TURN_RESET = {
+    "rewritten_query": None,
+    "queries": None,
+    "eval_action": None,
+    "context": None,
+    "scores": None,
+    "rrf_scores": None,
+    "summary_text": None,
+    "confidence": None,
+    "rewrite_attempts": 0,
+}
+
 
 def _is_chitchat(query: str) -> bool:
     normalized = query.strip().lower().rstrip("!.? ")
@@ -113,7 +127,7 @@ async def pre_retrieval_planner_node(state: GraphState, config: RunnableConfig) 
     # fall into the general_knowledge branch below by default.
     if _is_chitchat(query):
         print("[planner] heuristic match: chitchat, skipping retrieval")
-        return {"intent": "llm", "rewrite_type": "none", "task_type": None, "tavily_configured": tavily_configured}
+        return {**_FRESH_TURN_RESET, "intent": "llm", "rewrite_type": "none", "task_type": None, "tavily_configured": tavily_configured}
 
     if not state.file_id:
         # No document to retrieve from at all, and we already know it isn't
@@ -122,6 +136,7 @@ async def pre_retrieval_planner_node(state: GraphState, config: RunnableConfig) 
         # is what makes this (and only this) eligible for the Tavily
         # fallback in route_after_pre_planner, time-sensitive or not.
         return {
+            **_FRESH_TURN_RESET,
             "intent": "llm",
             "rewrite_type": "none",
             "task_type": "general_knowledge",
@@ -131,16 +146,16 @@ async def pre_retrieval_planner_node(state: GraphState, config: RunnableConfig) 
     heuristic_task_type = _heuristic_task_type(query)
     if heuristic_task_type == "summarize":
         print("[planner] heuristic match: summarize")
-        return {"intent": "rag", "rewrite_type": "none", "task_type": "summarize", "tavily_configured": tavily_configured}
+        return {**_FRESH_TURN_RESET, "intent": "rag", "rewrite_type": "none", "task_type": "summarize", "tavily_configured": tavily_configured}
 
     if heuristic_task_type == "aggregate":
         print("[planner] heuristic match: aggregate")
         # Aggregate queries route through the existing multi-rewrite fan-out
         # for broader coverage
-        return {"intent": "rag", "rewrite_type": "multi", "task_type": "aggregate", "tavily_configured": tavily_configured}
+        return {**_FRESH_TURN_RESET, "intent": "rag", "rewrite_type": "multi", "task_type": "aggregate", "tavily_configured": tavily_configured}
 
     if _is_ambiguous(query.lower()):
-        return {"intent": "rag", "rewrite_type": "single", "task_type": "qa", "tavily_configured": tavily_configured}
+        return {**_FRESH_TURN_RESET, "intent": "rag", "rewrite_type": "single", "task_type": "qa", "tavily_configured": tavily_configured}
 
     openai_api_key, groq_api_key = extract_keys(config)
 
@@ -158,6 +173,7 @@ async def pre_retrieval_planner_node(state: GraphState, config: RunnableConfig) 
         # prompt's own output options, but the code tolerates it) is not.
         resolved_task_type = "general_knowledge" if intent == "general_knowledge" else None
         return {
+            **_FRESH_TURN_RESET,
             "intent": "llm",
             "rewrite_type": "none",
             "task_type": resolved_task_type,
@@ -167,6 +183,7 @@ async def pre_retrieval_planner_node(state: GraphState, config: RunnableConfig) 
     # LLM classifier agreed the query is retrieval-worthy; give aggregate
     # queries the same multi-rewrite fan-out the heuristic path uses.
     return {
+        **_FRESH_TURN_RESET,
         "intent": "rag",
         "rewrite_type": "multi" if task_type == "aggregate" else "none",
         "task_type": task_type or "qa",
