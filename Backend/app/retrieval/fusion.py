@@ -22,9 +22,16 @@ def reciprocal_rank_fusion(rankings: List[List[dict]], k: int = 60) -> List[dict
     #       which is exactly what happens when retrieve_node fuses per-
     #       query-variant results for multi-rewrite/aggregate) is just as
     #       trustworthy as an explicit "dense" one
-    #   2 = "sparse"                               — wrong scale, only used
-    #       as a last resort when no dense-equivalent value ever shows up
-    #       for this doc at all (e.g. a doc dense search never returned)
+    #   2 = "sparse"                               — wrong scale (raw
+    #       BM25-style), and NEVER allowed to populate dense_score below.
+    #       A doc that was only ever found via sparse search has no real
+    #       cosine similarity to report; leaving dense_score as None (and
+    #       therefore the output "score" as 0.0) is the correct signal —
+    #       previously a sparse-only sighting's raw score leaked into
+    #       dense_score on first sight, silently feeding a BM25-scale
+    #       number into the evaluator's cosine-similarity thresholds and
+    #       pushing otherwise-fine retrievals into unnecessary rewrites
+    #       and web-search fallback.
     _SOURCE_QUALITY = {"dense": 0, "sparse": 2}
 
     scores: dict = {}
@@ -47,7 +54,9 @@ def reciprocal_rank_fusion(rankings: List[List[dict]], k: int = 60) -> List[dict
                 entry["source_scores"][source] = doc.get("score", 0.0)
 
             quality = _SOURCE_QUALITY.get(source, 1)
-            if entry["dense_score_rank"] is None or quality < entry["dense_score_rank"]:
+            # quality < 2 excludes "sparse" entirely — only a dense or
+            # already-resolved ("default") sighting may set dense_score.
+            if quality < 2 and (entry["dense_score_rank"] is None or quality < entry["dense_score_rank"]):
                 entry["dense_score"] = doc.get("score", entry["dense_score"] or 0.0)
                 entry["dense_score_rank"] = quality
 
@@ -55,10 +64,12 @@ def reciprocal_rank_fusion(rankings: List[List[dict]], k: int = 60) -> List[dict
     return [
         {
             "text": item["doc"]["text"],
-            # preserve dense cosine score specifically — evaluator.py's
-            # confidence thresholds depend on this being a real similarity,
-            # not an RRF score.
-            "score": item["dense_score"] if item["dense_score"] is not None else item["doc"].get("score", 0.0),
+            # dense_score is None for a doc that was only ever matched via
+            # sparse search — report 0.0 rather than falling back to a
+            # BM25-scale number, so the evaluator's cosine-similarity
+            # thresholds only ever see a real cosine score or an honest
+            # "no dense match" signal.
+            "score": item["dense_score"] if item["dense_score"] is not None else 0.0,
             "rrf_score": item["rrf_score"],
             "source_scores": item["source_scores"],
         }

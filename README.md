@@ -205,8 +205,6 @@ All model calls are routed through a provider abstraction. Groq failures or miss
 - Ingestion supports PDF, TXT, and DOCX sources with content-hash deduplication.
 - Chunk overlap is deduplicated before vector storage.
 
----
-
 ### Query Rewriting
 
 Rewriting is a recovery mechanism, not a default preprocessing step.
@@ -235,7 +233,6 @@ flowchart LR
 ### Conditional Reranking
 
 Reranking is deliberately not applied to every request.
-
 After evidence evaluation:
 
 ```mermaid
@@ -247,13 +244,10 @@ flowchart TD
     R --> G
 ```
 
-If there are four or fewer usable documents, generation proceeds directly.
-
-If more documents are available and the top scores have a clear separation, the system trims to the strongest four.
-
-Only ambiguous rankings invoke Cohere `rerank-v3.5`.
-
-This keeps the quality improvement of cross-encoder reranking without imposing its cost and latency on every query.
+- If there are four or fewer usable documents, generation proceeds directly.
+- If more documents are available and the top scores have a clear separation, the system trims to the strongest four.
+- Only ambiguous rankings invoke Cohere `rerank-v3.5`.
+- This keeps the quality improvement of cross-encoder reranking without imposing its cost and latency on every query.
 
 ### Summarization and Aggregate Queries
 
@@ -289,6 +283,7 @@ Retrieval is evaluated before generation:
 5. Ranking ambiguity separately determines whether Cohere reranking is necessary.
 
 This separates **retrieval failure** from **generation failure** and avoids paying for an LLM judge on every request.
+
 ---
 ## Evaluation & Observability
 
@@ -457,14 +452,3 @@ Frontend/
     └── pages/                          # ChatPage, LandingPage
 ```
 
-### Technology Stack
-
-**Backend:** Python 3.11, FastAPI, LangGraph, LangChain, Qdrant, Redis, MongoDB, slowapi, pymupdf4llm, tenacity
-
-**LLM / Retrieval:** OpenAI, Groq, Cohere, Tavily, dense + sparse retrieval, RRF
-
-**Evaluation:** Ragas, deterministic routing-trace assertions
-
-**Frontend:** React 19, Vite, Tailwind CSS 4, React Router, Axios, react-markdown
-
-**Infrastructure:** Docker, Vercel, Render, Qdrant, Redis, MongoDB, LangSmith

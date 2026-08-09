@@ -49,7 +49,7 @@ function ArchitectureSection() {
             ))}
           </div>
           <p className="text-sm text-zinc-600 mt-5 leading-relaxed">
-            LangGraph-orchestrated with planner, multi-strategy rewriting, confidence scoring, and cross-encoder reranking.
+            LangGraph-orchestrated with planner, multi-strategy rewriting, hybrid dense+sparse retrieval, confidence scoring, and cross-encoder reranking &mdash; routed across cost-aware LLM providers at every step.
           </p>
         </Card>
       </div>

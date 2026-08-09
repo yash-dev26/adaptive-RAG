@@ -7,6 +7,9 @@ const DIFFERENTIATORS = [
   { symbol: "↑",  title: "Cross-Encoder Reranking", desc: "A dedicated reranker model re-scores retrieved documents to surface the most relevant context." },
   { symbol: "◎", title: "Confidence-Based Routing", desc: "Evaluator node scores retrieval quality and routes to fallback LLM generation when confidence is low." },
   { symbol: "⬡", title: "LangGraph Execution Graph", desc: "Explicit node graph: pre_planner → rewrite → retrieve → evaluator → rerank → generate. Fully inspectable." },
+  { symbol: "⋈", title: "Hybrid Dense + Sparse Retrieval", desc: "Dense embeddings and BM25 sparse search fused with Reciprocal Rank Fusion, so lexical and semantic matches both surface." },
+  { symbol: "⇄", title: "Multi-Provider Cost Routing", desc: "Groq handles high-frequency orchestration calls, OpenAI is reserved for user-facing generation, with automatic fallback if a provider fails." },
+  { symbol: "✓", title: "Automated Evaluation Suite", desc: "Routing-trace assertions and Ragas-scored faithfulness/relevancy checks run against a golden set, with results tracked run over run." },
 ];
 
 function CapabilitiesSection() {
