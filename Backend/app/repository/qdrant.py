@@ -30,9 +30,7 @@ async def ensure_collections():
                 "dense": VectorParams(size=384, distance=Distance.COSINE),
             },
             sparse_vectors_config={
-                # Modifier.IDF: Qdrant applies IDF weighting server-side using
-                # its own corpus stats, since fastembed's BM25 doc vectors only
-                # carry saturated term frequency, not IDF.
+                
                 "sparse": SparseVectorParams(modifier=Modifier.IDF),
             },
         )

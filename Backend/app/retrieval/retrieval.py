@@ -1,12 +1,13 @@
 from qdrant_client.models import (
-    Filter, FieldCondition, MatchValue,
+    Filter, FieldCondition, MatchValue, Document,
 )
 
 from app.ingestion.embeddings import gen_embeddings
-from app.ingestion.sparse_embeddings import gen_sparse_query_embedding
 from app.config.qdrantConfig import qdrant_client
 from app.config.server import config
 from app.retrieval.fusion import reciprocal_rank_fusion
+
+BM25_MODEL_NAME = "Qdrant/bm25"
 
 
 def _build_filter(file_id: str | None, user_id: str | None):
@@ -29,22 +30,24 @@ async def retrieve_relevant_documents(
 ) -> list[dict]:
     """
     Hybrid search: dense + sparse fused with RRF.
+
+    Dense stays client-side (OpenAI's text-embedding-3-small, via
+    gen_embeddings). Sparse is generated server-side by Qdrant itself —
+    passing a `Document(model="Qdrant/bm25")` instead of a precomputed
+    vector — so there's no local BM25 model/runtime to load, race on, or
+    OOM on in this process. See ingestion/embeddings.py for the same
+    change on the write side, and config/qdrantConfig.py for the
+    `cloud_inference=True` client flag this requires.
     """
 
     payload_filter = _build_filter(file_id, user_id)
 
-    # Start embedding request immediately
-    dense_embedding_task = asyncio.create_task(
-        gen_embeddings(query, openai_api_key)
-    )
+    dense_embedding = await gen_embeddings(query, openai_api_key)
 
-    # CPU work overlaps with OpenAI request
-    sparse_embedding = gen_sparse_query_embedding(query)
-
-    # Wait for OpenAI
-    dense_embedding = await dense_embedding_task
-
-    # Run both vector searches concurrently
+    # Run both vector searches concurrently. The sparse side does its
+    # BM25 inference inside this call, on Qdrant's side, not before it —
+    # there's no separate local step to overlap with the dense request
+    # anymore.
     dense_result, sparse_result = await asyncio.gather(
         qdrant_client.query_points(
             collection_name=config["qdrant_collection_name"],
@@ -56,7 +59,7 @@ async def retrieve_relevant_documents(
         ),
         qdrant_client.query_points(
             collection_name=config["qdrant_collection_name"],
-            query=sparse_embedding,
+            query=Document(text=query, model=BM25_MODEL_NAME),
             using="sparse",
             query_filter=payload_filter,
             limit=top_k,

@@ -8,16 +8,18 @@ from fastapi import HTTPException
 import os
 import asyncio
 
+from qdrant_client.models import Document
+
 from app.config.redis import redis_client
 from app.repository.qdrant import store_in_qdrant
 from app.config.server import config
 from app.config.providers import get_openai_client
 from app.cache.embeddings_cache import _embedding_cache_key
-from app.ingestion.sparse_embeddings import gen_sparse_document_embeddings
 from app.utils.retry import external_api_retry
 
 EMBEDDING_MODEL = "text-embedding-3-small"
 EMBEDDING_DIMENSION = 384
+BM25_MODEL_NAME = "Qdrant/bm25"
 # Smaller batches to reduce per-request latency and improve parallelism
 BATCH_SIZE = int(os.getenv("EMBED_BATCH_SIZE", "64"))
 # Concurrency limit for processing multiple batches simultaneously
@@ -68,6 +70,11 @@ async def gen_embeddingsAndStoreInQdrant(
 
     print(f"[embeddings] Generating hybrid embeddings for {len(chunks)} chunks (batch_size={BATCH_SIZE}, concurrency={CONCURRENCY_LIMIT})...")
 
+    avg_chunk_len = (
+        sum(len(chunk["text"].split()) for chunk in chunks) / len(chunks)
+        if chunks else 0
+    )
+
     semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
 
     async def _process_batch(batch_start: int, batch_chunks: List[dict]):
@@ -76,23 +83,27 @@ async def gen_embeddingsAndStoreInQdrant(
         print(f"[embeddings] Processing batch {batch_start}:{batch_end} (size={len(batch_chunks)})")
 
         try:
-            dense_embeddings, sparse_embeddings = await asyncio.gather(
-                _embed_batch(batch_texts, openai_api_key),
-                asyncio.to_thread(gen_sparse_document_embeddings, batch_texts),
-            )
+            dense_embeddings = await _embed_batch(batch_texts, openai_api_key)
         except Exception as e:
             print(f"[embeddings] Batch failed at {batch_start}:{batch_end} -> {type(e).__name__}: {e}")
             raise
 
         points = []
-        for offset, (chunk_data, dense_vec, sparse_vec) in enumerate(
-            zip(batch_chunks, dense_embeddings, sparse_embeddings)
+        for offset, (chunk_data, dense_vec) in enumerate(
+            zip(batch_chunks, dense_embeddings)
         ):
             idx = batch_start + offset
             points.append(
                 {
                     "id": str(uuid4()),
-                    "vector": {"dense": dense_vec, "sparse": sparse_vec},
+                    "vector": {
+                        "dense": dense_vec,
+                        "sparse": Document(
+                            text=chunk_data["text"],
+                            model=BM25_MODEL_NAME,
+                            options={"avg_len": avg_chunk_len},
+                        ),
+                    },
                     "payload": {
                         "text": chunk_data["text"],
                         "page": chunk_data["page"],

@@ -11,7 +11,6 @@ import asyncio
 
 from app.repository.qdrant import ensure_collections
 from app.repository.chatSessions import ensure_indexes as ensure_chat_session_indexes
-from app.ingestion.sparse_embeddings import _get_sparse_model
 from app.config.server import config
 from slowapi.errors import RateLimitExceeded
 from fastapi.responses import JSONResponse
